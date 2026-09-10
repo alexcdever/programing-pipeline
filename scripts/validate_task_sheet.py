@@ -2,7 +2,7 @@
 """Validate the static structure of a generic programming task sheet.
 
 This checks structure and identity only. It does not decide whether the
-acceptance criteria are substantively correct; that remains the main agent's
+acceptance tests are substantively correct; that remains the main agent's
 responsibility.
 """
 
@@ -17,7 +17,7 @@ REQUIRED_HEADINGS = (
     "## 依赖与范围",
     "## 设计与行为契约",
     "## 环境前置",
-    "## 验收标准",
+    "## 验收测试",
     "## 决策点",
     "## 任务级进度",
     "### 验收台账",
@@ -37,10 +37,10 @@ def validate(path: Path) -> list[str]:
     for heading in REQUIRED_HEADINGS:
         if heading not in text:
             errors.append(f"missing heading: {heading}")
-    if not re.search(r"### AC\d+[：:]", text):
-        errors.append("at least one acceptance criterion (AC1, AC2, ...) is required")
-    if "| AC | 状态 | 当前测试/命令 | 最新证据 | 备注 |" not in text:
-        errors.append("acceptance ledger header is missing")
+    if not re.search(r"### 验收测试\d+[：:]", text):
+        errors.append("at least one acceptance test (验收测试1, 验收测试2, ...) is required")
+    if "| 验收测试 | 状态 | 当前测试/命令 | 最新证据 | 备注 |" not in text:
+        errors.append("acceptance-test ledger header is missing")
     if "- 合并提交：-" not in text:
         errors.append("final result must contain the merge-commit field")
     return errors
