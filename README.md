@@ -25,10 +25,6 @@ scripts/
   validate_task_sheet.py
 ```
 
-## 使用方式
-
-把本目录作为一个可加载的 agent skill，或将 `SKILL.md` 与其引用的 `templates/`、`references/`、`scripts/` 一起复制到目标 agent 的技能目录。具体的子代理调用命令、模型选择和通知方式不在本技能范围内。
-
 默认项目约定：
 
 - 任务单：`docs/tasks/<task-id>.md`
