@@ -114,7 +114,7 @@ metadata:
 
 当前任务的 `.workflow/<task-id>/` 至少包含：
 
-- `executor-report.md`：实现范围、每条 AC 的命令与结果、未完成项。
+- `executor-report.md`：实现范围、每条验收测试的命令与结果、未完成项。
 - `review-report.md`：独立复验的命令、当前测试正文检查、范围和覆盖率结论。
 - `final-check.md`：主代理最终检查、当前 branch/worktree 身份、合并前结论。
 
