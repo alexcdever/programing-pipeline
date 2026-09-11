@@ -1,7 +1,7 @@
 ---
 name: programing-pipeline
 description: "Use when an AI agent plans, implements, reviews, and merges coding work."
-version: 0.3.0
+version: 0.3.1
 author: Alex Chen (alexcdever)
 license: MIT
 platforms: [linux, macos, windows]
@@ -12,7 +12,7 @@ metadata:
 
 # 编程工作流
 
-这是一个与具体产品、模型和工具无关的编程项目工作流。它只定义主代理、执行子代理和审查子代理之间的协作契约，以及任务单、验收测试、证据、恢复和合并规则；不规定具体的子代理调用方式、命令、模型或通知方式。
+这是一个与具体产品和工具无关的编程项目工作流。它只定义主代理、执行子代理和审查子代理之间的协作契约，以及任务单、验收测试、证据、恢复和合并规则；不规定具体的子代理调用方式、命令或通知方式。
 
 ## 适用场景
 
