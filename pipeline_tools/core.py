@@ -34,7 +34,12 @@ def redact(value: Any) -> str:
     return _PATH_RE.sub("<path>", text)
 
 
-def git(root: Path, *args: str, timeout: float = 20) -> tuple[int, str]:
+def git(
+    root: Path,
+    *args: str,
+    timeout: float = 20,
+    redact_output: bool = True,
+) -> tuple[int, str]:
     """Run a read-only Git command with a bounded wait."""
     if not root.is_dir():
         return CONFIG, "working directory does not exist"
@@ -53,7 +58,8 @@ def git(root: Path, *args: str, timeout: float = 20) -> tuple[int, str]:
         return CONFIG, "git command timed out"
     # Do NOT strip: porcelain output is column-sensitive (a leading space is
     # part of the XY status code for the first line).
-    return result.returncode, redact((result.stdout or "") + (result.stderr or ""))
+    output = (result.stdout or "") + (result.stderr or "")
+    return result.returncode, redact(output) if redact_output else output
 
 
 def _write_log(path: Path, content: str) -> str | None:
@@ -589,7 +595,12 @@ def freeze_check(
         if rc or actual.strip() != expected_branch:
             errors.append("branch does not match expected branch")
     if expected_worktree:
-        rc, actual = git(root, "rev-parse", "--show-toplevel")
+        rc, actual = git(
+            root,
+            "rev-parse",
+            "--show-toplevel",
+            redact_output=False,
+        )
         try:
             expected = expected_worktree.resolve()
             actual_path = Path(actual.strip()).resolve()
