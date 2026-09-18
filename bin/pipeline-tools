@@ -1,0 +1,10 @@
+#!/usr/bin/env sh
+set -eu
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+if [ -n "${PYTHONPATH:-}" ]; then
+  PYTHONPATH="$ROOT${PATH_SEPARATOR:-:}$PYTHONPATH"
+else
+  PYTHONPATH="$ROOT"
+fi
+export PYTHONPATH
+exec python -m pipeline_tools "$@"

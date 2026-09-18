@@ -3,6 +3,7 @@ __pycache__/
 .pytest_cache/
 .venv/
 .env
-.workflow/
+.workflow/metrics/
+.workflow/metrics-export.json
 .DS_Store
 Thumbs.db

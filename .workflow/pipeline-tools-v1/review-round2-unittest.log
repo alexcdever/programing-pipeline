@@ -1,0 +1,33 @@
+test_bin_wrappers_run (test_cli.CLITests.test_bin_wrappers_run) ... ok
+test_command_run_empty_command_is_config_2 (test_cli.CLITests.test_command_run_empty_command_is_config_2) ... ok
+test_command_run_missing_executable_is_config_2 (test_cli.CLITests.test_command_run_missing_executable_is_config_2) ... ok
+test_command_run_nonzero_exit_is_fail_1 (test_cli.CLITests.test_command_run_nonzero_exit_is_fail_1) ... ok
+test_command_run_timeout_is_3_with_timed_out_flag (test_cli.CLITests.test_command_run_timeout_is_3_with_timed_out_flag) ... ok
+test_command_run_with_dashdash_separator (test_cli.CLITests.test_command_run_with_dashdash_separator) ... ok
+test_help (test_cli.CLITests.test_help) ... ok
+test_metrics_roundtrip_and_purge (test_cli.CLITests.test_metrics_roundtrip_and_purge) ... ok
+test_scope_check_multiple_allowed_flags (test_cli.CLITests.test_scope_check_multiple_allowed_flags) ... ok
+test_task_preflight_and_freeze_check_subcommands (test_cli.CLITests.test_task_preflight_and_freeze_check_subcommands) ... ok
+test_task_validate_real_sheet (test_cli.CLITests.test_task_validate_real_sheet) ... ok
+test_missing_and_bad_contract_fail_without_path (test_contract.ContractTests.test_missing_and_bad_contract_fail_without_path) ... ok
+test_placeholder_and_duplicate_ids_fail (test_contract.ContractTests.test_placeholder_and_duplicate_ids_fail) ... ok
+test_valid_pipeline_contract (test_contract.ContractTests.test_valid_pipeline_contract) ... ok
+test_absolute_evidence_reference_is_rejected (test_evidence.EvidenceTests.test_absolute_evidence_reference_is_rejected) ... ok
+test_all_reports_require_machine_evidence (test_evidence.EvidenceTests.test_all_reports_require_machine_evidence) ... ok
+test_gate_requires_pass_statuses (test_evidence.EvidenceTests.test_gate_requires_pass_statuses) ... ok
+test_identity_mismatch_blocks (test_evidence.EvidenceTests.test_identity_mismatch_blocks) ... ok
+test_missing_evidence_artifact_is_rejected (test_evidence.EvidenceTests.test_missing_evidence_artifact_is_rejected) ... ok
+test_missing_report_blocks (test_evidence.EvidenceTests.test_missing_report_blocks) ... ok
+test_nonpassing_report_is_structurally_valid_but_gate_rejects_it (test_evidence.EvidenceTests.test_nonpassing_report_is_structurally_valid_but_gate_rejects_it) ... ok
+test_passing_report_with_nonzero_command_is_rejected_by_gate (test_evidence.EvidenceTests.test_passing_report_with_nonzero_command_is_rejected_by_gate) ... ok
+test_prose_markers_without_machine_block_are_rejected (test_evidence.EvidenceTests.test_prose_markers_without_machine_block_are_rejected) ... ok
+test_freeze_requires_ancestor_contract (test_git_checks.GitChecks.test_freeze_requires_ancestor_contract) ... ok
+test_untracked_forbidden_is_detected (test_git_checks.GitChecks.test_untracked_forbidden_is_detected) ... ok
+test_reported_excluded_and_token_unknown (test_metrics.MetricsTests.test_reported_excluded_and_token_unknown) ... ok
+test_secret_is_redacted (test_runner.RunnerTests.test_secret_is_redacted) ... ok
+test_success_and_timeout (test_runner.RunnerTests.test_success_and_timeout) ... ok
+
+----------------------------------------------------------------------
+Ran 28 tests in 8.835s
+
+OK

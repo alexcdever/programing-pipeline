@@ -1,0 +1,30 @@
+# Review rerun — phase B: task validate / preflight / freeze-check (independent reviewer)
+date: 2026-09-18T07:58:42+08:00
+
+## B1 task validate (real frozen sheet)
+PASS
+B1 exit=0
+
+## B2 task validate (nonexistent -> expect 2)
+FAIL: task sheet unreadable
+B2 exit=2
+
+## B3 task preflight . --contract d9a4909 (contract + sheet)
+PASS
+B3 exit=0
+
+## B4 preflight alias . --contract d9a4909 (no sheet)
+PASS
+B4 exit=0
+
+## B5 freeze-check . --contract d9a4909
+PASS
+B5 exit=0
+
+## B6 freeze-check non-ancestor contract deadbeef (expect 4)
+FAIL: contract commit unavailable
+B6 exit=4
+
+## B7 contract identity vs HEAD in worktree: rev-parse
+d9a49099495cb90d9be2fdb7f9e118b87fdeb305
+d9a49099495cb90d9be2fdb7f9e118b87fdeb305

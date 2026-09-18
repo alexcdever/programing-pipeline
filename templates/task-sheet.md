@@ -3,6 +3,25 @@
 <!-- Task ID: <task-id> -->
 <!-- Contract section is frozen after commit. Lifecycle sections are maintained by the main agent. -->
 
+```pipeline-contract
+{
+  "schema": 1,
+  "task_id": "<task-id>",
+  "allowed_paths": ["<repo-relative-or-explicit-sibling-path-pattern>"],
+  "forbidden_paths": ["<path-pattern>"],
+  "acceptance_tests": [
+    {
+      "id": "AT1",
+      "evidence_level": 1,
+      "test_ref": "<file>: <exact test name>",
+      "command_ref": "<complete command>"
+    }
+  ]
+}
+```
+
+`pipeline-contract` is the machine-checkable projection of this task sheet. Keep it synchronized with the human-readable contract; after the contract commit it is frozen.
+
 ## 任务身份
 
 - 项目：<project name>
@@ -108,9 +127,9 @@
 |---|---|---|---|---|
 | - | 任务单创建 | 未开始 | - | 派发执行子代理 |
 
-### 设计变更与 continuation 索引
+### 设计变更与延续任务索引
 
-- 无。如需设计裁决，链接 `docs/tasks/<task-id>-continuation-N.md`，不得覆盖本任务历史。
+- 无。如需设计裁决，建立延续任务并链接 `docs/tasks/<task-id>-continuation-N.md`；机器路径保留 `continuation`，不得覆盖本任务历史。
 
 ### 最终结果
 

@@ -34,7 +34,7 @@
 
 每份报告必须标明：task-id、worktree、branch、角色、轮次、生成时间、当前测试数量和关键命令；报告目录与任务单必须完全同名。
 
-失效情形：引用其他任务/worktree/旧 branch；worktree 在报告后继续变化而未重生成；reviewer 只复制执行报告；报告只有结论没有命令和断言；任务单验收测试或范围已变而无对应 continuation。
+失效情形：引用其他任务/worktree/旧 branch；worktree 在报告后继续变化而未重生成；reviewer 只复制执行报告；报告只有结论没有命令和断言；任务单验收测试或范围已变而无对应延续任务（机器 ID/path 保留 `continuation`）。
 
 ## 证据等级
 

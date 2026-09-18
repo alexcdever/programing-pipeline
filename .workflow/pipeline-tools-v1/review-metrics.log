@@ -1,0 +1,36 @@
+# phase D metrics — date: 2026-09-18T08:04:23+0800 cwd: D:\Projects\Skills\programing-pipeline-tools
+
+== D1 record observed pass, task-id 'a/b' (unsafe chars), abs evidence-ref, no token ==
+exit 0 | out: {"event_file": "C:\\Users\\alexc\\AppData\\Local\\Temp\\tmptt2aw2hw\\.workflow\\metrics\\1789689863669193600-32fc5ce98f52441383bc64020467328d.json"} | err: 
+
+== D2 record reported pass (must NOT enter core) + derived fail token-count 12 ==
+exit 0 {"event_file": "C:\\Users\\alexc\\AppData\\Local\\Temp\\tmptt2aw2hw\\.workflow\\metrics\\1789689863903771800-6e59464c00284013b5ff7fd80a1d3870.json"} 
+exit 0 {"event_file": "C:\\Users\\alexc\\AppData\\Local\\Temp\\tmptt2aw2hw\\.workflow\\metrics\\1789689864153467000-4cc8a9fb691141769bc0fd2d76b1d22f.json"} 
+
+== D3 metrics report ==
+exit 0 | out: {"blocked": 0, "core_events": 2, "events": 3, "failed": 1, "flaky": 0, "passed": 1, "reported_events": 1, "schema": 1, "success_rate": 0.5, "token_count_total": 12, "token_count_unknown": 1, "unknown_results": 0}
+core_events: 2 | reported_events: 1 | passed: 1 | failed: 1 | success_rate: 0.5 | token_count_total: 12
+ASSERT OK: reported excluded from success_rate; token total from core events only
+
+== D4 raw event files: sanitization scan ==
+files: ['1789689863669193600-32fc5ce98f52441383bc64020467328d.json', '1789689863903771800-6e59464c00284013b5ff7fd80a1d3870.json', '1789689864153467000-4cc8a9fb691141769bc0fd2d76b1d22f.json']
+contains absolute temp path: False | contains 'a/b': False | contains 'a_b' (sanitized): True | contains null token: True
+event keys: ['attempt', 'confidence', 'duration_s', 'event', 'event_id', 'evidence_ref', 'reason', 'recorded_at', 'result', 'schema', 'task_id', 'timed_out', 'token_count']
+task_id: a_b | evidence_ref: None | token_count: None
+
+== D5 export + purge + rebuild (evidence dirs survive purge) ==
+export exit 0
+export file exists: True | same aggregate: True
+purge exit 0 | out: {"deleted": 3}
+events after purge: []
+evidence dir survived purge: True
+report after purge exit 0 | out: {"blocked": 0, "core_events": 0, "events": 0, "failed": 0, "flaky": 0, "passed": 0, "reported_events": 0, "schema": 1, "success_rate": null, "token_count_total": null, "token_count_unknown": 0, "unknown_results": 0}
+aggregate rebuildable from zero events: True
+
+== D6 invalid confidence must be CONFIG(2), fail-closed ==
+exit 2 | err: usage: pipeline-tools metrics record [-h] --confidence
+
+== D7 malformed event file makes aggregate fail-closed ==
+exit 2 | err: FAIL: ValueError
+
+PHASE D DONE

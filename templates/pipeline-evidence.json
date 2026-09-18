@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "task_id": "<task-id>",
+  "worktree": ".worktrees/<task-id>",
+  "branch": "<branch>",
+  "role": "executor",
+  "round": 1,
+  "status": "PASS",
+  "commands": [
+    {
+      "command": "<complete command>",
+      "exit_code": 0,
+      "evidence_ref": ".workflow/<task-id>/<raw-output>.log"
+    }
+  ],
+  "assertions": ["<observed assertion>"],
+  "evidence_refs": [".workflow/<task-id>/<raw-output>.log"],
+  "unverified": []
+}

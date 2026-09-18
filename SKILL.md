@@ -1,7 +1,7 @@
 ---
 name: programing-pipeline
 description: "Use when an agent plans, builds, reviews, or merges code."
-version: 0.4.1
+version: 0.5.0
 author: Alex Chen (alexcdever)
 license: MIT
 platforms: [linux, macos, windows]
@@ -33,10 +33,20 @@ AI agent 修改、重构、修复、扩展或验证 Git 项目时使用，尤其
 - PASS 必须能回溯到当前 task-id、HEAD、worktree、branch、完整命令、退出码、关键断言和产物；通知、代理自述和旧报告不能代替当前证据。
 - 主代理按需读取本文件和相关 reference，不默认加载全部资料；委派简报只传任务身份、冻结契约路径、允许范围、验收 ID/命令、决策点和报告格式，证据不足再扩展阅读。
 
+## 机械工具与项目级反馈
+
+机械检查和统计由独立的 `programing-pipeline-tools` 命令程序执行；技能只规定调用时机和判断边界。新任务单必须包含 `pipeline-contract` 机器区块，由 `pipeline-tools task validate` 校验；任务执行前运行 `task preflight`，执行中用 `command run` 统一超时和日志，范围用 `scope check`，合并前后用 `evidence verify` 与 `gate`。
+
+- 工具输出的退出码和原始日志是机械事实；终端摘要不替代日志。
+- 工具不可用、命令超时、证据缺失或身份/范围漂移时标为 `BLOCKED`/漂移，不绕过工具改写成 PASS。
+- 报告必须包含机器可读的 `pipeline-evidence` 区块；自然语言报告不能单独产生验收结论。
+- 项目反馈只写入未跟踪的 `.workflow/metrics/`；`observed`/`derived` 才能进入聚合，`reported` 只能保留追溯。统计不参与验收，不自动改写技能或契约。
+- 正常只把短摘要放入上下文；完整输出、报告和统计事件留在项目文件中，需要诊断时再读取。
+
 ## 不可违反的规则
 
 1. 任务单先于实现：契约必须提交后才能建 worktree 或派发。
-2. 契约冻结：不得为迁就实现改验收测试；设计变更记裁决并开 continuation，保留原历史。
+2. 契约冻结：不得为迁就实现改验收测试；设计变更记裁决并开延续任务（机器 task-id/path 保留 `continuation`），保留原历史。
 3. 验收测试即用例：每条必须指向当前测试文件、用例、断言、命令、结果边界。
 4. 独立审查：独立上下文直接复验；转述他人结果不算。
 5. 证据属当前任务：task-id、worktree、branch、测试输出、报告路径必须一致且本轮生成。
@@ -55,16 +65,16 @@ AI agent 修改、重构、修复、扩展或验证 Git 项目时使用，尤其
 5. 独立审查：新上下文核身份和报告新鲜度，逐条复验；通过 ≠ 已合并。
 6. 最终检查：读任务单/执行/审查/最终检查报告，抽查高风险测试，重跑关键验收、全量测试、构建、lint、范围、冲突检查；全部有证据才 ready-to-merge。
 7. 合并复验：提交实现+证据，用 branch ref 合并；主工作树重装依赖，重跑聚焦验收、全量测试、构建、lint、差异检查；通过才标已合并。
-8. 持久化：更新验收台账、执行记录、continuation 索引、最终结果、路线图、任务指针；完成通知含项目、task-id、阶段、分支、合并提交、验收状态、遗留项。
+8. 持久化：更新验收台账、执行记录、延续任务索引、最终结果、路线图、任务指针；完成通知含项目、task-id、阶段、分支、合并提交、验收状态、遗留项。
 
 ## 证据目录最小要求
 
 `.workflow/<task-id>/` 至少含 `executor-report.md`、`review-report.md`、`final-check.md`；每份写明 task-id、worktree、branch、轮次、命令、退出码、关键断言和证据文件。旧任务目录仅作历史。
 
-## 任务规模与 continuation
+## 任务规模与延续任务
 
 - 含多个独立领域聚合、十个以上互不共享 fixture 的验收族或多平台任务，先拆成可独立审查的切片。
-- 实现失败/证据缺失/环境阻塞/设计改变分开记录；continuation 用新 ID、新任务单、新证据目录，父任务失败、裁决、已验收部分不得覆盖。
+- 实现失败/证据缺失/环境阻塞/设计改变分开记录；设计或契约改变时创建延续任务，使用新 ID、新任务单、新证据目录（机器 ID/path 保留 `continuation`），父任务失败、裁决、已验收部分不得覆盖。
 - 保留实现和证据现场，不无理由删 worktree、分支或报告。
 
 ## 参考文件（按需读取）

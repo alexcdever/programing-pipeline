@@ -1,0 +1,14 @@
+# phase F contract fail-modes — date: 2026-09-18T08:04:25+0800
+F1 missing forbidden_paths: exit=2 out='FAIL: missing contract field: forbidden_paths; forbidden_paths must be an array' abs_path_leak=False
+F2 invalid JSON: exit=2 out='FAIL: pipeline-contract JSON is invalid at line 1' abs_path_leak=False
+F3 placeholder command_ref: exit=2 out='FAIL: acceptance test 1 has empty or placeholder command_ref' abs_path_leak=False
+F4 missing evidence_level: exit=2 out='FAIL: acceptance test 1 missing field: evidence_level; acceptance test 1 evidence_level must be integer 1-5' abs_path_leak=False
+F5 evidence_level out of range: exit=2 out='FAIL: acceptance test 1 evidence_level must be integer 1-5' abs_path_leak=False
+F6 duplicate ids: exit=2 out='FAIL: duplicate acceptance test id: AT1' abs_path_leak=False
+F7 task_id mismatch: exit=2 out='FAIL: task_id does not match Task ID' abs_path_leak=False
+F8 schema not 1: exit=2 out='FAIL: schema must be integer 1' abs_path_leak=False
+F9 traversal in allowed_paths: exit=2 out='FAIL: allowed_paths[1] must be a non-empty safe path pattern' abs_path_leak=False
+F10 no contract block: exit=2 out='FAIL: task sheet must contain exactly one pipeline-contract block' abs_path_leak=False
+F11 two contract blocks: exit=2 out='FAIL: task sheet must contain exactly one pipeline-contract block' abs_path_leak=False
+
+ALL F CASES: exit 2, no PASS, no absolute-path leak — fail-closed CONFIRMED

@@ -14,7 +14,7 @@
 
 ### 前置条件
 
-- `programing-pipeline` 当前提交 `88c75d3`。
+- `programing-pipeline` 当前基线提交 `88c75d3`；本任务会在工具 worktree 内同步接线改动，父技能接线证据以本任务最终提交为准。
 - Python 3.11 标准库；不依赖网络、第三方 Python 包或特定项目语言。
 - 新工具源码目录为 `D:/Projects/Skills/programing-pipeline-tools`，单独作为命令程序项目。
 
@@ -186,26 +186,32 @@
 ### 任务锚点
 
 - 基线 HEAD：88c75d3cd8a7d315ef52cf98686c555db0f1252e
-- 契约提交：-
-- 执行分支：-
-- 执行 worktree：-
+- 契约提交：d9a4909
+- 执行分支：pipeline-tools-v1
+- 执行 worktree：D:/Projects/Skills/programing-pipeline-tools
 
 ### 验收台账
 
 | 验收测试 | 状态 | 当前测试/命令 | 最新证据 | 备注 |
 |---|---|---|---|---|
-| 验收测试1 | 未开始 | - | - | - |
-| 验收测试2 | 未开始 | - | - | - |
-| 验收测试3 | 未开始 | - | - | - |
-| 验收测试4 | 未开始 | - | - | - |
-| 验收测试5 | 未开始 | - | - | - |
-| 验收测试6 | 未开始 | - | - | - |
+| 验收测试1 | 已通过 | `python -m unittest discover -s tests -p 'test_contract.py'` | `.workflow/pipeline-tools-v1/unittest-full.log`（28 tests OK，含契约用例） | 契约 fail-closed 11 种失败模式由审查探针复核 |
+| 验收测试2 | 已通过 | `python -m unittest discover -s tests -p 'test_git_checks.py'` | 同上 | freeze/scope 身份检查含临时真实 Git 仓库 |
+| 验收测试3 | 已通过 | `python -m unittest discover -s tests -p 'test_runner.py'` | 同上 | 超时=3、进程树终止、脱敏均覆盖 |
+| 验收测试4 | 已通过 | `python -m unittest discover -s tests -p 'test_evidence.py'` | 同上 | 机器证据、身份不匹配、散文拒绝、gate 状态闸门 |
+| 验收测试5 | 已通过 | `python -m unittest discover -s tests -p 'test_metrics.py'` | 同上 | reported 不入核心、token null、往返重建 |
+| 验收测试6 | 已通过 | `python -m unittest discover -s tests -p 'test_cli.py'` | 同上 | 模块入口、退出码、bin 包装器、真实任务单 |
 
 ### 执行记录
 
 | 时间/轮次 | 事件 | 结果 | 证据 | 后续 |
 |---|---|---|---|---|
-| - | 任务单创建 | 未开始 | - | 提交任务契约后创建工具项目和执行 worktree |
+| 2026-09-18 / 创建 | 主代理读取技能现状与既有 validate_task_sheet.py，设计工具任务契约 | 设计完成 | `docs/tasks/pipeline-tools-v1.md`（契约提交 d9a4909） | 创建工具 worktree 并派发执行 |
+| 2026-09-18 / 执行 round 1 | 执行子代理 sa-0-68139c61 实现 v1 | 1800 秒超时，未提交部分实现保留 | 会话记录 | 重派 |
+| 2026-09-18 / 执行 round 2 | 执行子代理 sa-0-c5053021 修复收尾 | 1800 秒超时，CLI 测试从 7 失败降到 3 失败 | 会话记录 | 主代理接管 |
+| 2026-09-18 / 执行 round 3 | 主代理接管：修复契约正则、porcelain strip 缺陷、机器证据格式，24→28 tests 全绿 | 全绿 | `executor-report.md` round 3 | 派发独立审查 |
+| 2026-09-18 / 审查 round 1-2 | 审查子代理两次派发 | 均 1800 秒超时，留下部分 review-*.log | review-*.log | 缩小范围重派 |
+| 2026-09-18 / 审查 round 3 | 审查子代理 sa-0-e4393c91 极短复核 | PASS（28 tests、validate/preflight/scope 全 exit 0） | `review-report.md` round 3 | 主代理终检 |
+| 2026-09-18 / 终检 round 4 | 主代理终检：发现并修复 `_read_machine_evidence` 的 `\\n` 字面量缺陷与重复函数定义；串行重跑 4 项关键验收全部 exit 0 | READY-TO-MERGE | `final-check.md` round 4；evidence verify + gate pre-merge 均 PASS | 停下等待用户审阅 |
 
 ### 设计变更与 continuation 索引
 
@@ -213,10 +219,10 @@
 
 ### 最终结果
 
-- 状态：未开始
-- 执行子代理：未开始
-- 独立审查子代理：未开始
-- 主代理最终检查：未开始
-- 合并提交：-
-- 合并后复验：未开始
-- 遗留项：-
+- 状态：已验收（READY-TO-MERGE，等待用户审阅后合并）
+- 执行子代理：完成（round 1-2 子代理超时，round 3 主代理接管完成）
+- 独立审查子代理：完成（round 1-2 子代理超时，round 3 缩小范围复核 PASS）
+- 主代理最终检查：通过（`final-check.md`，4/4 exit 0 + evidence verify + gate pre-merge PASS）
+- 合并提交：-（待用户批准后合并）
+- 合并后复验：未开始（合并后执行）
+- 遗留项：父技能 programing-pipeline 的 SKILL.md/README/templates 接线未做（属允许范围，留作后续任务）；POSIX bin 包装器未在 Windows 实跑。

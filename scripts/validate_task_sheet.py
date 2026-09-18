@@ -44,6 +44,8 @@ REQUIRED_ACCEPTANCE_FIELDS = (
     "- 结果要求：",
 )
 
+CONTRACT_RE = re.compile(r"```pipeline-contract\s*\n(.*?)\n```", flags=re.DOTALL)
+
 
 def validate(path: Path) -> list[str]:
     errors: list[str] = []
@@ -53,6 +55,11 @@ def validate(path: Path) -> list[str]:
         errors.append("first line must be a Markdown title")
     if not re.search(r"<!--\s*Task ID:\s*[A-Za-z0-9][A-Za-z0-9._-]*\s*-->", text):
         errors.append("missing valid Task ID comment")
+    blocks = CONTRACT_RE.findall(text)
+    if len(blocks) != 1:
+        errors.append("task sheet must contain exactly one pipeline-contract block")
+    elif any(token in blocks[0] for token in ("<task-id>", "<repo-relative", "<path-pattern>", "<file>", "<exact test name>", "<complete command>")):
+        errors.append("pipeline-contract contains unfilled placeholders")
     for heading in REQUIRED_HEADINGS:
         if heading not in text:
             errors.append(f"missing heading: {heading}")

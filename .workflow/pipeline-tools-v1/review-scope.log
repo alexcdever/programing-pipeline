@@ -1,0 +1,13 @@
+# Review rerun — phase C: scope check (independent reviewer)
+date: 2026-09-18T07:59:05+08:00
+
+## C1 scope check . --allowed (task allow-list, exact)
+FAIL: .gitignore, bin/pipeline-tools, bin/pipeline-tools.cmd, pipeline_tools/__init__.py, pipeline_tools/__main__.py, pipeline_tools/contract.py, pipeline_tools/core.py, tests/test_cli.py, tests/test_contract.py, tests/test_evidence.py, tests/test_git_checks.py, tests/test_metrics.py, tests/test_runner.py
+C1 exit=4
+
+## C2 probe: absolute allow pattern vs porcelain relative path (temp git repo)
+C2 exit=2
+
+## C3 probe: modified tracked file with leading-space porcelain code (M in worktree column)
+BAD: ['working directory does not exist']
+C3 exit=0
