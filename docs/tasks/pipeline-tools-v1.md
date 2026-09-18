@@ -211,7 +211,8 @@
 | 2026-09-18 / 执行 round 3 | 主代理接管：修复契约正则、porcelain strip 缺陷、机器证据格式，24→28 tests 全绿 | 全绿 | `executor-report.md` round 3 | 派发独立审查 |
 | 2026-09-18 / 审查 round 1-2 | 审查子代理两次派发 | 均 1800 秒超时，留下部分 review-*.log | review-*.log | 缩小范围重派 |
 | 2026-09-18 / 审查 round 3 | 审查子代理 sa-0-e4393c91 极短复核 | PASS（28 tests、validate/preflight/scope 全 exit 0） | `review-report.md` round 3 | 主代理终检 |
-| 2026-09-18 / 终检 round 4 | 主代理终检：发现并修复 `_read_machine_evidence` 的 `\\n` 字面量缺陷与重复函数定义；串行重跑 4 项关键验收全部 exit 0 | READY-TO-MERGE | `final-check.md` round 4；evidence verify + gate pre-merge 均 PASS | 停下等待用户审阅 |
+| 2026-09-18 / 终检 round 4 | 主代理终检：发现并修复 `_read_machine_evidence` 的 `\\n` 字面量缺陷与重复函数定义；串行重跑 4 项关键验收全部 exit 0 | READY-TO-MERGE | `final-check.md` round 4；evidence verify + gate pre-merge 均 PASS | 等待用户批准 |
+| 2026-09-18 / 合并后复验 | fast-forward 合并到 main；主工作树复验 | PASS（31 tests、身份/范围/证据/合并后闸门全通过） | 主工作树终端输出 | 任务完成，等待推送 |
 
 ### 设计变更与 continuation 索引
 
@@ -219,10 +220,10 @@
 
 ### 最终结果
 
-- 状态：已验收（READY-TO-MERGE，等待用户审阅后合并）
+- 状态：已合并并完成主工作树复验
 - 执行子代理：完成（round 1-2 子代理超时，round 3 主代理接管完成）
 - 独立审查子代理：完成（round 1-2 子代理超时，round 3 缩小范围复核 PASS）
 - 主代理最终检查：通过（`final-check.md`，4/4 exit 0 + evidence verify + gate pre-merge PASS）
-- 合并提交：-（待用户批准后合并）
-- 合并后复验：未开始（合并后执行）
-- 遗留项：父技能 programing-pipeline 的 SKILL.md/README/templates 接线未做（属允许范围，留作后续任务）；POSIX bin 包装器未在 Windows 实跑。
+- 合并提交：932a351
+- 合并后复验：通过（31 tests；task validate/preflight；scope；evidence verify；gate post-merge）
+- 遗留项：POSIX bin 包装器未在 Windows 实跑（Windows cmd 包装器已由测试覆盖）。
