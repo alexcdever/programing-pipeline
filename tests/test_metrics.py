@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from pipeline_tools.core import aggregate, metric_event
+from pipeline_tools.core import aggregate, import_opencode_session, metric_event
 
 
 class MetricsTests(unittest.TestCase):
@@ -65,7 +65,43 @@ class MetricsTests(unittest.TestCase):
                     'evidence_ref': str(root / 'secret.log'),
                 })
 
+    def test_blocker_classes_and_process_metrics_are_aggregated(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            metric_event(root, {
+                'event': 'environment_block', 'confidence': 'observed', 'task_id': 'task-a',
+                'result': 'blocked', 'blocker_class': 'environment',
+            })
+            metric_event(root, {
+                'event': 'main_agent_product_edit', 'confidence': 'observed', 'task_id': 'task-a',
+                'result': 'fail', 'blocker_class': 'workflow',
+            })
+            summary = aggregate(root)
+            self.assertEqual(summary['blockers_by_class']['environment'], 1)
+            self.assertEqual(summary['main_agent_product_edits'], 1)
+
+    def test_import_opencode_session_records_structured_observations(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            session = root / 'session.json'
+            session.write_text(json.dumps({
+                'info': {'id': 'ses_demo'},
+                'messages': [
+                    {'info': {'role': 'user'}, 'parts': [{'type': 'text', 'text': '继续'}]},
+                    {'info': {'role': 'user'}, 'parts': [{'type': 'text', 'text': '为什么停下来？'}]},
+                    {'info': {'role': 'assistant'}, 'parts': [
+                        {'type': 'tool', 'tool': 'task', 'state': {'status': 'error'}},
+                        {'type': 'text', 'text': '我直接修改产品代码，违反了工作流。'},
+                    ]},
+                ],
+            }), encoding='utf-8')
+            imported = import_opencode_session(root, session, 'demo')
+            self.assertGreaterEqual(len(imported), 4)
+            summary = aggregate(root)
+            self.assertGreaterEqual(summary['user_continue_nudges'], 1)
+            self.assertGreaterEqual(summary['user_process_corrections'], 1)
+            self.assertEqual(summary['main_agent_product_edits'], 1)
+
 
 if __name__ == '__main__':
     unittest.main()
-

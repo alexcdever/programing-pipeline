@@ -10,6 +10,7 @@ import signal
 import subprocess
 import time
 import uuid
+import hashlib
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +18,7 @@ PASS, FAIL, CONFIG, BLOCKED, DRIFT = 0, 1, 2, 3, 4
 REPORT_NAMES = ("executor-report.md", "review-report.md", "final-check.md")
 CONFIDENCES = {"observed", "derived", "reported"}
 METRIC_RESULTS = {"pass", "passed", "fail", "failed", "blocked", "flaky", "unknown"}
+BLOCKER_CLASSES = {"product", "environment", "permission", "evidence", "dependency", "workflow", None}
 
 _SECRET_RE = re.compile(
     r"(?i)\b(password|passwd|token|secret|authorization|api[_-]?key|cvc)\b"
@@ -420,6 +422,9 @@ def metric_event(root: Path, event: dict[str, Any]) -> Path:
     evidence_ref = event.get("evidence_ref")
     if evidence_ref is not None and not _validate_evidence_ref(evidence_ref):
         raise ValueError("evidence_ref must be a project-relative path or null")
+    blocker_class = event.get("blocker_class")
+    if blocker_class not in BLOCKER_CLASSES:
+        raise ValueError("invalid blocker_class")
 
     clean: dict[str, Any] = {
         "schema": 1,
@@ -435,6 +440,8 @@ def metric_event(root: Path, event: dict[str, Any]) -> Path:
         "reason": _safe_identifier(event["reason"]) if event.get("reason") else None,
         "attempt": event.get("attempt", 0),
         "evidence_ref": _relative_reference(evidence_ref),
+        "blocker_class": blocker_class,
+        "source": _safe_identifier(event["source"]) if event.get("source") else None,
     }
     if clean["duration_s"] is not None and (
         isinstance(clean["duration_s"], bool)
@@ -495,6 +502,10 @@ def aggregate(root: Path) -> dict[str, Any]:
             "post_merge_regression",
         )
     }
+    blocker_counts = {
+        name: sum(row.get("blocker_class") == name for row in core)
+        for name in ("product", "environment", "permission", "evidence", "dependency", "workflow")
+    }
     return {
         "schema": 1,
         "events": len(rows),
@@ -513,7 +524,337 @@ def aggregate(root: Path) -> dict[str, Any]:
         "timeouts": event_counts["timeout"] + sum(row.get("timed_out") is True for row in core),
         "evidence_gaps": event_counts["evidence_gap"],
         "post_merge_regressions": event_counts["post_merge_regression"],
+        "blockers_by_class": blocker_counts,
+        "main_agent_product_edits": sum(row.get("event") == "main_agent_product_edit" for row in core),
+        "user_continue_nudges": sum(row.get("event") == "user_continue_nudge" for row in core),
+        "user_process_corrections": sum(row.get("event") == "user_process_correction" for row in core),
+        "recovery_path_misses": sum(row.get("event") == "recovery_path_miss" for row in core),
     }
+
+
+def _safe_version(value: str) -> str:
+    match = re.search(r"v?(\d+(?:\.\d+){0,2})", value or "")
+    return match.group(1) if match else "unknown"
+
+
+def runtime_preflight(
+    root: Path,
+    expected_node: str | None = None,
+    expected_pnpm: str | None = None,
+    required_commands: list[str] | None = None,
+    timeout: float = 20,
+) -> dict[str, Any]:
+    """Check the runtime before dispatching an executor or reviewer."""
+    if not root.is_dir():
+        return {"status": "blocked", "blocker_class": "environment", "errors": ["working directory does not exist"]}
+    checks: dict[str, Any] = {}
+    errors: list[str] = []
+    for name in ("node", "pnpm", "git") + tuple(required_commands or []):
+        try:
+            result = subprocess.run(
+                [name, "--version"] if name not in {"git"} else [name, "--version"],
+                cwd=root, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout,
+            )
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            checks[name] = "missing"
+            errors.append(f"{name} unavailable")
+            continue
+        version = _safe_version((result.stdout or result.stderr).strip())
+        checks[name] = version if result.returncode == 0 else "unavailable"
+        if result.returncode != 0:
+            errors.append(f"{name} returned {result.returncode}")
+    if expected_node and checks.get("node") != _safe_version(expected_node):
+        errors.append("node version mismatch")
+    if expected_pnpm and checks.get("pnpm") != _safe_version(expected_pnpm):
+        errors.append("pnpm version mismatch")
+    return {
+        "status": "pass" if not errors else "blocked",
+        "blocker_class": None if not errors else "environment",
+        "checks": checks,
+        "errors": errors,
+    }
+
+
+def capability_handshake(
+    root: Path,
+    role: str,
+    workflow_directory: Path,
+    product_write_allowed: bool = False,
+    expected_node: str | None = None,
+    expected_pnpm: str | None = None,
+    required_commands: list[str] | None = None,
+) -> dict[str, Any]:
+    """Create a bounded, machine-readable agent capability handshake."""
+    runtime = runtime_preflight(root, expected_node, expected_pnpm, required_commands)
+    checks = {
+        "repository_read": root.is_dir(),
+        "workflow_write": workflow_directory.is_dir() or workflow_directory.parent.is_dir(),
+        "product_write": product_write_allowed,
+        "runtime": runtime["status"] == "pass",
+    }
+    errors = list(runtime.get("errors", []))
+    if not checks["repository_read"]:
+        errors.append("repository unavailable")
+    if not checks["workflow_write"]:
+        errors.append("workflow directory is not writable")
+    if role == "reviewer" and product_write_allowed:
+        errors.append("reviewer product write must be denied")
+    result = {
+        "schema": 1,
+        "role": role,
+        "status": "pass" if not errors else "blocked",
+        "checks": checks,
+        "runtime": runtime,
+        "errors": errors,
+    }
+    workflow_directory.mkdir(parents=True, exist_ok=True)
+    (workflow_directory / "capability-handshake.json").write_text(
+        json.dumps(result, ensure_ascii=True, sort_keys=True), encoding="utf-8"
+    )
+    return result
+
+
+def lifecycle_status(root: Path, task_id: str, evidence_directory: Path) -> dict[str, Any]:
+    """Derive the next safe workflow phase from current machine evidence."""
+    errors: list[str] = []
+    observed: list[dict[str, Any]] = []
+    if not root.is_dir():
+        return {
+            "phase": "recovery",
+            "status": "blocked",
+            "errors": ["working directory does not exist"],
+            "blockers": [{"class": "environment", "reason": "working directory does not exist"}],
+            "next_actions": [],
+            "unverified": ["repository identity", "task evidence"],
+        }
+    if not evidence_directory.exists():
+        observed.append({"fact": "evidence_directory", "value": "not_created"})
+    reports = {
+        name: (evidence_directory / name).is_file()
+        for name in REPORT_NAMES
+    }
+    machine_results = {
+        name: (evidence_directory / name).is_file()
+        for name in ("executor-result.json", "reviewer-result.json", "final-result.json")
+    }
+    observed.append({"fact": "machine_results", "value": machine_results})
+    observed.append({"fact": "evidence_reports", "value": reports})
+    if machine_results["final-result.json"] or reports["final-check.md"]:
+        phase = "merge"
+    elif machine_results["reviewer-result.json"] or reports["review-report.md"]:
+        phase = "final-check"
+    elif machine_results["executor-result.json"] or reports["executor-report.md"]:
+        phase = "review"
+    else:
+        phase = "executor"
+    blockers: list[dict[str, str]] = []
+    if errors:
+        blockers.append({"class": "evidence", "reason": errors[0]})
+    next_actions_by_phase = {
+        "executor": ["dispatch_executor"],
+        "review": ["dispatch_reviewer"],
+        "final-check": ["run_final_check"],
+        "merge": ["run_gate_pre_merge", "merge_branch"],
+    }
+    if blockers:
+        status = "blocked"
+        next_actions: list[str] = ["reconcile_evidence"]
+    else:
+        status = "ready"
+        next_actions = next_actions_by_phase[phase]
+    return {
+        "schema": 1,
+        "command": "lifecycle.status",
+        "task_id": task_id,
+        "phase": phase,
+        "status": status,
+        "observed": observed,
+        "errors": errors,
+        "blockers": blockers,
+        "next_actions": next_actions,
+        "forbidden_actions": ["merge_branch"] if phase != "merge" else [],
+        "unverified": [] if phase == "merge" else ["current phase acceptance evidence"],
+    }
+
+
+def _json_file(path: Path) -> dict[str, Any] | None:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def _file_sha256(path: Path) -> str | None:
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError:
+        return None
+
+
+def write_dispatch(root: Path, dispatch: dict[str, Any], output: Path) -> Path:
+    """Validate and atomically write a structured executor/reviewer dispatch."""
+    required = ("schema", "task_id", "role", "round", "root", "worktree", "branch", "evidence_dir", "permissions", "output")
+    missing = [field for field in required if field not in dispatch]
+    if missing:
+        raise ValueError(f"dispatch missing fields: {', '.join(missing)}")
+    if dispatch["schema"] != 1 or dispatch["role"] not in {"executor", "reviewer"}:
+        raise ValueError("invalid dispatch schema or role")
+    permissions = dispatch["permissions"]
+    if not isinstance(permissions, dict) or permissions.get("write_workflow") is not True:
+        raise ValueError("dispatch must allow workflow writes")
+    if dispatch["role"] == "reviewer" and permissions.get("write_product") is not False:
+        raise ValueError("reviewer product writes must be false")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    temporary = output.with_suffix(".tmp")
+    temporary.write_text(json.dumps(dispatch, ensure_ascii=True, sort_keys=True), encoding="utf-8")
+    os.replace(temporary, output)
+    return output
+
+
+def verify_structured_result(path: Path, expected_task_id: str, expected_role: str) -> list[str]:
+    """Validate a machine result without interpreting semantic claims."""
+    value = _json_file(path)
+    if value is None:
+        return ["result is missing or invalid JSON"]
+    errors: list[str] = []
+    for field in ("schema", "task_id", "role", "status", "acceptance", "unverified"):
+        if field not in value:
+            errors.append(f"missing field: {field}")
+    if value.get("schema") != 1:
+        errors.append("schema must be 1")
+    if value.get("task_id") != expected_task_id:
+        errors.append("task identity mismatch")
+    if value.get("role") != expected_role:
+        errors.append("role mismatch")
+    if value.get("status") not in {"pass", "fail", "blocked", "flaky"}:
+        errors.append("invalid status")
+    if not isinstance(value.get("acceptance"), list) or not value.get("acceptance"):
+        errors.append("acceptance must be a non-empty array")
+    if not isinstance(value.get("unverified"), list):
+        errors.append("unverified must be an array")
+    for index, item in enumerate(value.get("acceptance", []), start=1):
+        if not isinstance(item, dict):
+            errors.append(f"acceptance {index} must be an object")
+            continue
+        for field in ("id", "status", "exit_code", "evidence_refs"):
+            if field not in item:
+                errors.append(f"acceptance {index} missing field: {field}")
+        if item.get("status") not in {"pass", "fail", "blocked", "flaky", "unverified"}:
+            errors.append(f"acceptance {index} has invalid status")
+        if not isinstance(item.get("evidence_refs"), list):
+            errors.append(f"acceptance {index} evidence_refs must be an array")
+    return errors
+
+
+def evidence_freshness(root: Path, evidence_directory: Path, result_path: Path | None = None) -> dict[str, Any]:
+    """Compare structured result identity and evidence timestamps with current Git state."""
+    result = _json_file(result_path) if result_path else None
+    errors: list[str] = []
+    observed: list[dict[str, Any]] = []
+    rc, head = git(root, "rev-parse", "HEAD")
+    current_head = head.strip() if rc == 0 else None
+    if current_head:
+        observed.append({"fact": "head", "value": current_head})
+    if result is None:
+        errors.append("structured result is missing")
+    elif result.get("identity", {}).get("head") and result["identity"]["head"] != current_head:
+        errors.append("result HEAD is stale")
+    evidence_refs: list[str] = []
+    if result:
+        for item in result.get("acceptance", []):
+            if isinstance(item, dict):
+                evidence_refs.extend(ref for ref in item.get("evidence_refs", []) if isinstance(ref, str))
+    missing = []
+    for reference in evidence_refs:
+        candidate = root / reference.replace("\\", "/")
+        if not candidate.is_file():
+            missing.append(reference)
+    if missing:
+        errors.append("evidence artifact missing")
+    return {
+        "schema": 1,
+        "command": "evidence.freshness",
+        "status": "pass" if not errors else "blocked",
+        "observed": observed,
+        "errors": errors,
+        "blockers": [{"class": "evidence", "reason": error} for error in errors],
+        "artifacts": [str(evidence_directory / "freshness.json")],
+        "next_actions": [] if not errors else ["regenerate_structured_result"],
+        "unverified": [],
+        "result_sha256": _file_sha256(result_path) if result_path else None,
+    }
+
+
+def role_scope_check(
+    root: Path,
+    role: str,
+    product_patterns: list[str] | None = None,
+    authorized: bool = False,
+) -> list[str]:
+    """Prevent the main agent from changing product files without authorization."""
+    if role != "main-agent" or authorized:
+        return []
+    patterns = product_patterns or ["src/**", "packages/**", "apps/**", "lib/**", "app/**"]
+    rc, output = git(root, "status", "--porcelain=v1", "--untracked-files=all")
+    if rc:
+        return [output or "not a git repository"]
+    return [path for path in _status_paths(output) if any(_matches(path, pattern, root) for pattern in patterns)]
+
+
+def _session_text(session: dict[str, Any], role: str | None = None) -> list[str]:
+    values: list[str] = []
+    for message in session.get("messages", []):
+        if role is not None and message.get("info", {}).get("role") != role:
+            continue
+        for part in message.get("parts", []):
+            if isinstance(part, dict) and isinstance(part.get("text"), str):
+                values.append(part["text"])
+    return values
+
+
+def import_opencode_session(root: Path, session_file: Path, task_id: str = "opencode-session") -> list[Path]:
+    """Convert structured OpenCode export observations into local metric events."""
+    session = json.loads(session_file.read_text(encoding="utf-8"))
+    if not isinstance(session, dict) or not isinstance(session.get("messages"), list):
+        raise ValueError("invalid OpenCode session export")
+    info = session.get("info", {}) if isinstance(session.get("info"), dict) else {}
+    texts = _session_text(session, role="user")
+    output: list[Path] = []
+    tool_errors = 0
+    task_errors = 0
+    for message in session["messages"]:
+        for part in message.get("parts", []):
+            if not isinstance(part, dict):
+                continue
+            if part.get("type") == "tool" and isinstance(part.get("state"), dict) and part["state"].get("status") == "error":
+                tool_errors += 1
+            if part.get("type") == "tool" and part.get("tool") == "task" and isinstance(part.get("state"), dict) and part["state"].get("status") == "error":
+                task_errors += 1
+    def record(name: str, result: str, reason: str, blocker: str | None = None) -> None:
+        output.append(metric_event(root, {
+            "event": name, "confidence": "observed", "task_id": task_id, "result": result,
+            "reason": reason, "blocker_class": blocker, "source": "opencode_session",
+            "evidence_ref": None,
+        }))
+    if tool_errors:
+        record("evidence_gap", "blocked", f"tool_errors_{tool_errors}", "evidence")
+    if task_errors:
+        record("retry", "blocked", f"subagent_errors_{task_errors}", "workflow")
+    lower = "\n".join(texts).lower()
+    assistant_lower = "\n".join(_session_text(session, role="assistant")).lower()
+    for marker, name, reason in (
+        ("继续", "user_continue_nudge", "user_requested_continue"),
+        ("为什么停", "user_process_correction", "user_questioned_stop"),
+        ("卡住", "user_process_correction", "user_reported_stuck"),
+        ("改代码什么的不该", "user_process_correction", "user_corrected_role_boundary"),
+    ):
+        count = lower.count(marker.lower())
+        for _ in range(count):
+            record(name, "unknown", reason)
+    if "直接修改产品代码" in assistant_lower or "违反了你提供的工作流" in assistant_lower:
+        record("main_agent_product_edit", "fail", "role_boundary_violation", "workflow")
+    return output
 
 
 def purge_metrics(root: Path) -> int:

@@ -15,5 +15,9 @@
   ],
   "assertions": ["<observed assertion>"],
   "evidence_refs": [".workflow/<task-id>/<raw-output>.log"],
-  "unverified": []
+  "unverified": [],
+  "identity": {
+    "head": "<commit-sha>"
+  },
+  "recommendation": "ready_for_review"
 }

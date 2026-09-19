@@ -4,6 +4,8 @@
 
 每条验收测试绑定：精确测试文件和用例名；触发动作和输入；具体断言（成功、失败、持久化、恢复边界）；完整命令、工作目录、环境前置和超时；当前轮次的实际输出、退出码和产物路径。
 
+机器编排的权威输入输出应使用当前任务目录中的 `dispatch.json`、`executor-result.json`、`reviewer-result.json` 和 `final-result.json`。Markdown 报告保留给人类阅读；`result verify` 与 `freshness` 必须先通过，语义代理的 recommendation 才能进入下一阶段。
+
 “跑全量测试”、“功能正常”或“所有验收测试通过”都不是验收证据。
 
 ## 事实与结论边界

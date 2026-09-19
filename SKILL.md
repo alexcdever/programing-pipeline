@@ -38,6 +38,13 @@ AI agent 修改、重构、修复、扩展或验证 Git 项目时使用，尤其
 机械检查和统计由独立的 `programing-pipeline-tools` 命令程序执行；技能只规定调用时机和判断边界。新任务单必须包含 `pipeline-contract` 机器区块，由 `pipeline-tools task validate` 校验；任务执行前运行 `task preflight`，执行中用 `command run` 统一超时和日志，范围用 `scope check`，合并前后用 `evidence verify` 与 `gate`。
 
 - 工具输出的退出码和原始日志是机械事实；终端摘要不替代日志。
+- 在派发 executor/reviewer 前先运行 runtime preflight，确认 Node/pnpm/Git、native ABI 和项目所需测试能力；环境不匹配不得伪装成产品失败或继续正式验收。
+- 子代理启动后先执行 `runtime handshake`：确认可读任务与 worktree、可执行验收命令、可写 `.workflow/**`，reviewer 不可写产品代码；握手 JSON 必须落在当前任务证据目录。
+- 主代理未经用户明确授权不得修改产品代码；executor/reviewer 失败后应重派、建立 continuation 或保留决策点，不得接管实现。
+- OpenCode Desktop 会话可用 `metrics import-opencode-session` 导入结构化流程信号；导入器不得从自然语言推断产品 PASS。
+- 程序化命令应优先使用 `--format json --output <path>`；JSON 结果是后续阶段的权威输入，终端短摘要不作为流程状态来源。
+- 使用 `lifecycle status` 获取当前阶段和允许/禁止动作；语义代理只能提交 recommendation/findings，不能直接把自然语言结论当作 gate 状态。
+- 结构化执行闭环使用 `dispatch write`、`result verify` 和 `freshness`；只有当前 task-id、角色、HEAD、验收结果和证据引用均通过机械校验，才能把语义代理的 recommendation 交给下一阶段。
 - 工具不可用、命令超时、证据缺失或身份/范围漂移时标为 `BLOCKED`/漂移，不绕过工具改写成 PASS。
 - 报告必须包含机器可读的 `pipeline-evidence` 区块；自然语言报告不能单独产生验收结论。
 - 项目反馈只写入未跟踪的 `.workflow/metrics/`；`observed`/`derived` 才能进入聚合，`reported` 只能保留追溯。统计不参与验收，不自动改写技能或契约。

@@ -43,9 +43,24 @@ python -m pipeline_tools metrics record . retry --confidence observed --task-id 
 python -m pipeline_tools metrics report .
 python -m pipeline_tools metrics export . .workflow/metrics-summary.json
 python -m pipeline_tools metrics purge .
+python -m pipeline_tools metrics import-opencode-session . <session-export.json> --task-id <task-id>
+python -m pipeline_tools runtime preflight . --node 22.23.2 --pnpm 9.15.4
+python -m pipeline_tools runtime handshake . .workflow/<task-id> --role reviewer --node 22.23.2 --pnpm 9.15.4
+python -m pipeline_tools runtime role-scope . --role main-agent --product-pattern 'packages/**'
+python -m pipeline_tools --format json --output .workflow/<task-id>/task-validate.json task validate docs/tasks/<task-id>.md
+python -m pipeline_tools --format json lifecycle status . --task-id <task-id> --evidence .workflow/<task-id>
+python -m pipeline_tools dispatch write dispatch.json .workflow/<task-id>/dispatch.json
+python -m pipeline_tools result verify .workflow/<task-id>/reviewer-result.json --task-id <task-id> --role reviewer
+python -m pipeline_tools --format json freshness . .workflow/<task-id> --result .workflow/<task-id>/reviewer-result.json
 ```
 
 事件逐文件原子写入 `.workflow/metrics/`。只有 `observed` 和 `derived` 进入核心聚合；`reported` 只留作追溯。详见 `references/metrics-contract.md`。
+
+`metrics import-opencode-session` 只从 OpenCode Desktop 的结构化导出中提取可验证的工具错误、子代理错误和用户流程纠正信号；不会把自然语言 PASS 当作验收事实。`runtime preflight` 应在派发 executor/reviewer 前执行，`runtime role-scope` 用于阻止未授权的主代理产品代码修改。
+
+结构化命令使用统一响应外壳：`schema`、`command`、`status`、`exit_code`、`observed`、`errors`、`blockers`、`artifacts`、`next_actions` 和 `unverified`。JSON 文件是流程编排输入，终端摘要只用于人类查看。
+
+结构化闭环顺序为：`dispatch write` → agent 写入 `executor-result.json`/`reviewer-result.json` → `result verify` → `freshness` → `lifecycle status` → merge gate。Markdown 报告用于人类阅读，JSON 结果用于机械编排。
 
 ## 测试
 

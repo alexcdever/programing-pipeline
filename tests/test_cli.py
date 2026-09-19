@@ -1,4 +1,4 @@
-import os, subprocess, sys, tempfile, unittest
+import json, os, subprocess, sys, tempfile, unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -28,8 +28,18 @@ class CLITests(unittest.TestCase):
     def test_help(self):
         p = run_cli(['--help'])
         self.assertEqual(p.returncode, 0)
-        for word in ('task', 'scope', 'command', 'evidence', 'gate', 'metrics'):
+        for word in ('task', 'scope', 'command', 'evidence', 'gate', 'metrics', 'lifecycle'):
             self.assertIn(word, p.stdout)
+
+    def test_json_output_has_common_envelope_and_can_be_saved(self):
+        with tempfile.TemporaryDirectory() as d:
+            output = Path(d) / 'result.json'
+            p = run_cli(['--format', 'json', '--output', str(output), 'task', 'validate', str(ROOT / 'docs' / 'tasks' / 'pipeline-tools-v1.md')])
+            self.assertEqual(p.returncode, 0, (p.stdout, p.stderr))
+            value = json.loads(p.stdout)
+            self.assertEqual(value['schema'], 1)
+            self.assertEqual(value['status'], 'pass')
+            self.assertEqual(json.loads(output.read_text(encoding='utf-8')), value)
 
     def test_command_run_with_dashdash_separator(self):
         # README documents: command run --cwd . --log L --timeout 30 -- python -c "print('hi')"
@@ -104,6 +114,35 @@ class CLITests(unittest.TestCase):
             self.assertEqual(p.returncode, 0, (p.stdout, p.stderr))
             self.assertEqual(list((root / '.workflow' / 'metrics').glob('*.json')), [])
 
+    def test_runtime_preflight_and_role_scope(self):
+        with tempfile.TemporaryDirectory() as d:
+            root, _ = make_repo(d)
+            p = run_cli(['runtime', 'preflight', str(root), '--node', '0.0.0'])
+            self.assertEqual(p.returncode, 3, (p.stdout, p.stderr))
+            (root / 'src').mkdir()
+            (root / 'src' / 'app.py').write_text('x', encoding='utf-8')
+            p = run_cli(['runtime', 'role-scope', str(root), '--role', 'main-agent', '--product-pattern', 'src/**'])
+            self.assertEqual(p.returncode, 4, (p.stdout, p.stderr))
+            p = run_cli(['runtime', 'role-scope', str(root), '--role', 'main-agent', '--product-pattern', 'src/**', '--authorized'])
+            self.assertEqual(p.returncode, 0, (p.stdout, p.stderr))
+
+    def test_runtime_handshake_writes_machine_evidence(self):
+        with tempfile.TemporaryDirectory() as d:
+            root, _ = make_repo(d)
+            workflow = root / '.workflow' / 'demo'
+            p = run_cli(['runtime', 'handshake', str(root), str(workflow), '--role', 'reviewer'])
+            self.assertEqual(p.returncode, 3, (p.stdout, p.stderr))
+            self.assertTrue((workflow / 'capability-handshake.json').is_file())
+
+    def test_import_opencode_session_cli(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            session = root / 'session.json'
+            session.write_text('{"info":{"id":"ses_demo"},"messages":[]}', encoding='utf-8')
+            p = run_cli(['metrics', 'import-opencode-session', str(root), str(session), '--task-id', 'demo'])
+            self.assertEqual(p.returncode, 0, (p.stdout, p.stderr))
+            self.assertIn('"imported": 0', p.stdout)
+
     def test_bin_wrappers_run(self):
         # AT6: wrappers must run; on Windows use .cmd via shell, on POSIX use the sh wrapper.
         import platform
@@ -122,6 +161,45 @@ class CLITests(unittest.TestCase):
         self.assertEqual(p.returncode, 0, (p.stdout, p.stderr))
         p = run_cli(['task', 'validate', str(ROOT / 'nope.md')])
         self.assertEqual(p.returncode, 2, (p.stdout, p.stderr))
+
+    def test_lifecycle_status_is_structured_and_starts_with_executor(self):
+        with tempfile.TemporaryDirectory() as d:
+            root, _ = make_repo(d)
+            evidence = root / '.workflow' / 'demo'
+            p = run_cli(['--format', 'json', 'lifecycle', 'status', str(root), '--task-id', 'demo', '--evidence', str(evidence)])
+            self.assertEqual(p.returncode, 0, (p.stdout, p.stderr))
+            value = json.loads(p.stdout)
+            self.assertEqual(value['status'], 'ready')
+            self.assertEqual(value['phase'], 'executor')
+            self.assertIn('dispatch_executor', value['next_actions'])
+
+    def test_dispatch_result_and_freshness_form_machine_closed_loop(self):
+        with tempfile.TemporaryDirectory() as d:
+            root, head = make_repo(d)
+            dispatch = root / 'dispatch.json'
+            dispatch.write_text(json.dumps({
+                'schema': 1, 'task_id': 'demo', 'role': 'reviewer', 'round': 1,
+                'root': '.', 'worktree': '.', 'branch': 'main',
+                'evidence_dir': '.workflow/demo',
+                'permissions': {'write_workflow': True, 'write_product': False},
+                'output': {'result': '.workflow/demo/reviewer-result.json'},
+            }), encoding='utf-8')
+            out = root / '.workflow' / 'demo' / 'dispatch.json'
+            p = run_cli(['dispatch', 'write', str(dispatch), str(out)])
+            self.assertEqual(p.returncode, 0, (p.stdout, p.stderr))
+            evidence = root / '.workflow' / 'demo' / 'evidence.log'
+            evidence.write_text('observed', encoding='utf-8')
+            result = root / '.workflow' / 'demo' / 'reviewer-result.json'
+            result.write_text(json.dumps({
+                'schema': 1, 'task_id': 'demo', 'role': 'reviewer', 'status': 'pass',
+                'identity': {'head': head}, 'acceptance': [{'id': 'AT1', 'status': 'pass', 'exit_code': 0, 'evidence_refs': ['.workflow/demo/evidence.log']}],
+                'unverified': [],
+            }), encoding='utf-8')
+            p = run_cli(['result', 'verify', str(result), '--task-id', 'demo', '--role', 'reviewer'])
+            self.assertEqual(p.returncode, 0, (p.stdout, p.stderr))
+            p = run_cli(['--format', 'json', 'freshness', str(root), str(root / '.workflow' / 'demo'), '--result', str(result)])
+            self.assertEqual(p.returncode, 0, (p.stdout, p.stderr))
+            self.assertEqual(json.loads(p.stdout)['status'], 'pass')
 
 
 if __name__ == '__main__':

@@ -30,7 +30,9 @@
   "token_count": null,
   "reason": null,
   "attempt": 0,
-  "evidence_ref": ".workflow/task-id/raw-command.log"
+  "evidence_ref": ".workflow/task-id/raw-command.log",
+  "blocker_class": null,
+  "source": null
 }
 ```
 
@@ -38,6 +40,8 @@
 - `evidence_ref` 只能是项目内相对路径；绝对路径、`..` 和空值以外的非法值拒绝写入。
 - 不记录原始 prompt、源代码、完整命令输出、完整日志、绝对路径、用户名、邮箱、凭据、令牌或业务数据。
 - `token_count` 只有运行时提供实际值才填写；字符数或估算值不能冒充实际 token。
+- `blocker_class` 可为 `product`、`environment`、`permission`、`evidence`、`dependency` 或 `workflow`；用于区分产品失败与执行环境/流程阻塞。
+- `source` 只保存短的结构化来源标识，例如 `opencode_session`，不得保存原始会话内容。
 
 ## 固定事件名
 
@@ -50,8 +54,14 @@
 | `timeout` | 有界命令或任务超时 |
 | `evidence_gap` | 缺命令、退出码、产物、身份或新鲜证据 |
 | `post_merge_regression` | 合并后复验推翻 worktree 结论 |
+| `environment_block` | runtime、Node/pnpm、native ABI 或测试能力不可用 |
+| `permission_block` | OpenCode 工具/代理权限阻止了所需操作 |
+| `main_agent_product_edit` | 主代理未获授权修改产品代码 |
+| `user_continue_nudge` | 用户要求继续推进已开始的任务 |
+| `user_process_correction` | 用户纠正停滞、角色或流程行为 |
+| `recovery_path_miss` | 恢复阶段读取了不存在或错误路径 |
 
-`aggregate`、`report` 和 `export` 只从事件文件重建摘要，至少输出成功率、reported 排除数量、token 已知/未知数量，以及上表的事件计数。聚合文件可以删除后重建。
+`aggregate`、`report` 和 `export` 只从事件文件重建摘要，至少输出成功率、reported 排除数量、token 已知/未知数量、阻塞类型计数、用户流程纠正、主代理产品修改，以及上表的事件计数。聚合文件可以删除后重建。
 
 ## 反馈边界
 
