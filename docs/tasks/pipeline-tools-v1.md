@@ -8,7 +8,7 @@
 - 项目：programing-pipeline 与 programing-pipeline-tools
 - 领域或阶段：工作流机械化 / v1
 - 用户结果或系统能力：使用不依赖大模型判断的 Python 命令程序，校验任务契约、Git 身份、改动范围、任务证据和有界命令执行，并在项目 `.workflow/metrics/` 生成脱敏反馈统计。
-- 状态：未开始
+- 状态：已合并；自动指标采集由 `pipeline-tools-v1-continuation-1` 补充
 
 ## 依赖与范围
 
@@ -58,7 +58,7 @@
 
 主代理提供已冻结任务单、项目根目录和明确命令参数；工具程序只执行可验证的机械检查或记录已声明事实：
 
-触发命令 → 解析任务契约/Git/报告/命令输出 → 生成结构化 PASS、FAIL、BLOCKED 或契约漂移结果 → 原始输出落盘、终端只返回短摘要；metrics 只写项目 `.workflow/metrics/`，不进入 Git。
+触发命令 → 解析任务契约/Git/报告/命令输出 → 生成结构化 PASS、FAIL、BLOCKED 或契约漂移结果 → 原始输出落盘、终端只返回短摘要；metrics 写入项目 `.workflow/metrics/`，作为可审查工作流历史进入 Git。
 
 - 工具程序使用稳定退出码：`0` 通过，`1` 观察到产品/测试失败，`2` 参数或配置错误，`3` 证据不足或环境阻塞，`4` 身份、契约或范围漂移。
 - 任务单中的 `pipeline-contract` JSON 区块是机械检查投影；任务单正文供人阅读，工具不得通过自由文本补全缺失字段。
@@ -78,6 +78,7 @@
     "templates/task-sheet.md",
     "scripts/validate_task_sheet.py",
     "docs/tasks/pipeline-tools-v1.md",
+    ".workflow/metrics/**",
     ".workflow/pipeline-tools-v1/**"
   ],
   "forbidden_paths": [
@@ -216,7 +217,7 @@
 
 ### 设计变更与 continuation 索引
 
-- 无。如需改变机器契约、统计可信度或命令安全边界，建立 `pipeline-tools-v1-continuation-N`，不得覆盖本任务历史。
+- [`pipeline-tools-v1-continuation-1`](pipeline-tools-v1-continuation-1.md)：将指标从显式可选记录改为非 `metrics` 阶段命令的自动采集，并允许 `.workflow/metrics/**` 作为可审查 Git 历史；不改变验收结论语义。
 
 ### 最终结果
 
@@ -226,4 +227,4 @@
 - 主代理最终检查：通过（`final-check.md`，4/4 exit 0 + evidence verify + gate pre-merge PASS）
 - 合并提交：932a351
 - 合并后复验：通过（31 tests；task validate/preflight；scope；evidence verify；gate post-merge）
-- 遗留项：POSIX bin 包装器未在 Windows 实跑（Windows cmd 包装器已由测试覆盖）。
+- 遗留项：POSIX bin 包装器未在 Windows 实跑（Windows cmd 包装器已由测试覆盖）；自动指标 continuation 已在 Node 22.23.2 + pnpm 10.27.0 环境完成 preflight、reviewer handshake 和完整测试复验。

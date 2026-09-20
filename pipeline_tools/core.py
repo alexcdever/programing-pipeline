@@ -219,9 +219,18 @@ def scope_check(root: Path, allowed: list[str], forbidden: list[str]) -> list[st
     forbidden = forbidden or []
     bad = []
     for path in _status_paths(output):
-        if any(_matches(path, pattern, root) for pattern in forbidden) or not any(
-            _matches(path, pattern, root) for pattern in allowed
+        # Automatically generated metrics are workflow metadata and may be
+        # tracked by the host project. They must not turn every frozen task
+        # scope check into a product-scope failure.
+        normalized = _normalize_path(path)
+        forbidden_match = any(_matches(path, pattern, root) for pattern in forbidden)
+        allowed_match = any(_matches(path, pattern, root) for pattern in allowed)
+        if (
+            (normalized == ".workflow/metrics" or normalized.startswith(".workflow/metrics/"))
+            and not forbidden_match
         ):
+            continue
+        if forbidden_match or not allowed_match:
             bad.append(path)
     return bad
 
@@ -388,6 +397,12 @@ def _metrics_dir(root: Path) -> Path:
 
 
 def _safe_identifier(value: Any) -> str:
+    text = str(value or "")
+    if (
+        re.search(r"(?i)(secret|token|password|api[_-]?key|passwd|authorization|cvc)", text)
+        or _BEARER_RE.search(text)
+    ):
+        return "unknown"
     cleaned = re.sub(r"[^A-Za-z0-9._-]", "_", str(value or "unknown"))
     return cleaned or "unknown"
 
@@ -399,6 +414,11 @@ def _relative_reference(value: Any) -> str | None:
     if not text or Path(text).is_absolute() or text.startswith(("/", "../")):
         return None
     if ".." in text.split("/"):
+        return None
+    if (
+        any(re.search(r"(?i)(secret|token|password|api[_-]?key|passwd|authorization|cvc)", part) for part in text.split("/"))
+        or _BEARER_RE.search(text)
+    ):
         return None
     return text
 
@@ -506,6 +526,11 @@ def aggregate(root: Path) -> dict[str, Any]:
         name: sum(row.get("blocker_class") == name for row in core)
         for name in ("product", "environment", "permission", "evidence", "dependency", "workflow")
     }
+    all_event_counts: dict[str, int] = {}
+    for row in core:
+        event = row.get("event")
+        if isinstance(event, str):
+            all_event_counts[event] = all_event_counts.get(event, 0) + 1
     return {
         "schema": 1,
         "events": len(rows),
@@ -529,6 +554,8 @@ def aggregate(root: Path) -> dict[str, Any]:
         "user_continue_nudges": sum(row.get("event") == "user_continue_nudge" for row in core),
         "user_process_corrections": sum(row.get("event") == "user_process_correction" for row in core),
         "recovery_path_misses": sum(row.get("event") == "recovery_path_miss" for row in core),
+        "automatic_events": sum(row.get("source") == "pipeline_tools" for row in core),
+        "event_counts": dict(sorted(all_event_counts.items())),
     }
 
 
@@ -549,7 +576,8 @@ def runtime_preflight(
         return {"status": "blocked", "blocker_class": "environment", "errors": ["working directory does not exist"]}
     checks: dict[str, Any] = {}
     errors: list[str] = []
-    for name in ("node", "pnpm", "git") + tuple(required_commands or []):
+    commands = ("node", "pnpm.cmd", "git") + tuple(required_commands or []) if os.name == "nt" else ("node", "pnpm", "git") + tuple(required_commands or [])
+    for name in commands:
         try:
             result = subprocess.run(
                 [name, "--version"] if name not in {"git"} else [name, "--version"],
@@ -560,7 +588,8 @@ def runtime_preflight(
             errors.append(f"{name} unavailable")
             continue
         version = _safe_version((result.stdout or result.stderr).strip())
-        checks[name] = version if result.returncode == 0 else "unavailable"
+        logical_name = "pnpm" if name == "pnpm.cmd" else name
+        checks[logical_name] = version if result.returncode == 0 else "unavailable"
         if result.returncode != 0:
             errors.append(f"{name} returned {result.returncode}")
     if expected_node and checks.get("node") != _safe_version(expected_node):

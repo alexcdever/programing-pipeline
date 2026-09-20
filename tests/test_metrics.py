@@ -22,6 +22,31 @@ class MetricsTests(unittest.TestCase):
             self.assertNotIn(str(root), raw)
             self.assertIn('null', raw)
 
+    def test_sensitive_identifiers_are_redacted_at_metric_boundary(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            path = metric_event(root, {
+                'event': 'test', 'confidence': 'observed', 'task_id': 'customer-token',
+                'result': 'pass', 'evidence_ref': 'reports/password.log',
+            })
+            value = json.loads(path.read_text(encoding='utf-8'))
+            self.assertEqual(value['task_id'], 'unknown')
+            self.assertIsNone(value['evidence_ref'])
+
+    def test_extended_sensitive_vocabulary_is_redacted_at_metric_boundary(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            path = metric_event(root, {
+                'event': 'test', 'confidence': 'observed', 'task_id': 'authorization',
+                'reason': 'Bearer abc', 'source': 'passwd', 'result': 'pass',
+                'evidence_ref': 'reports/authorization.log',
+            })
+            value = json.loads(path.read_text(encoding='utf-8'))
+            self.assertEqual(value['task_id'], 'unknown')
+            self.assertEqual(value['reason'], 'unknown')
+            self.assertEqual(value['source'], 'unknown')
+            self.assertIsNone(value['evidence_ref'])
+
     def test_feedback_events_are_aggregated_without_treating_unknown_as_failure(self):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
@@ -79,6 +104,17 @@ class MetricsTests(unittest.TestCase):
             summary = aggregate(root)
             self.assertEqual(summary['blockers_by_class']['environment'], 1)
             self.assertEqual(summary['main_agent_product_edits'], 1)
+
+    def test_automatic_event_counts_are_available_for_new_stage_names(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            metric_event(root, {
+                'event': 'task_validate', 'confidence': 'observed', 'task_id': 'task-a',
+                'result': 'pass', 'source': 'pipeline_tools',
+            })
+            summary = aggregate(root)
+            self.assertEqual(summary['automatic_events'], 1)
+            self.assertEqual(summary['event_counts']['task_validate'], 1)
 
     def test_import_opencode_session_records_structured_observations(self):
         with tempfile.TemporaryDirectory() as d:

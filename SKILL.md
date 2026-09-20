@@ -1,7 +1,7 @@
 ---
 name: programing-pipeline
 description: "Use when an agent plans, builds, reviews, or merges code."
-version: 0.5.1
+version: 0.6.1
 author: Alex Chen (alexcdever)
 license: MIT
 platforms: [linux, macos, windows]
@@ -57,7 +57,8 @@ AI agent 修改、重构、修复、扩展或验证 Git 项目时使用，尤其
 - 结构化执行闭环使用 `dispatch write`、`result verify` 和 `freshness`；只有当前 task-id、角色、HEAD、验收结果和证据引用均通过机械校验，才能把语义代理的 recommendation 交给下一阶段。
 - 工具不可用、命令超时、证据缺失或身份/范围漂移时标为 `BLOCKED`/漂移，不绕过工具改写成 PASS。
 - 报告必须包含机器可读的 `pipeline-evidence` 区块；自然语言报告不能单独产生验收结论。
-- 项目反馈只写入未跟踪的 `.workflow/metrics/`；`observed`/`derived` 才能进入聚合，`reported` 只能保留追溯。统计不参与验收，不自动改写技能或契约。
+- 每个非 `metrics` 的 `pipeline-tools` 阶段命令默认自动写入一个 `observed` 结果事件到项目 `.workflow/metrics/`；超时、环境阻塞、证据缺口、范围漂移等只根据机械退出码和结构化结果追加 `derived` 反馈事件。该目录应纳入 Git 追踪，作为可审查的流程改进历史。`reported` 只能保留追溯，统计不参与验收，不自动改写技能或契约。
+- 自动采集不得从自然语言报告推断产品 PASS；不得记录 prompt、完整命令输出、凭据、token 或业务数据。仅在测试/明确诊断时使用 `PIPELINE_TOOLS_DISABLE_AUTO_METRICS=1` 关闭。
 - 正常只把短摘要放入上下文；完整输出、报告和统计事件留在项目文件中，需要诊断时再读取。
 
 ## 不可违反的规则

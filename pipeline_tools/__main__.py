@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import re
 import sys
+import time
 from pathlib import Path
 
 from .contract import validate_task
@@ -104,6 +107,7 @@ def _build_parser() -> argparse.ArgumentParser:
     scope_sub = scope.add_subparsers(dest="action", required=True)
     scope_check_parser = scope_sub.add_parser("check")
     scope_check_parser.add_argument("root", type=Path)
+    scope_check_parser.add_argument("--task-id")
     _add_scope_args(scope_check_parser)
 
     command = groups.add_parser("command", help="run a bounded command")
@@ -112,6 +116,8 @@ def _build_parser() -> argparse.ArgumentParser:
     runner.add_argument("--cwd", type=Path, required=True)
     runner.add_argument("--log", type=Path, required=True)
     runner.add_argument("--timeout", type=float, default=30)
+    runner.add_argument("--task-id")
+    runner.add_argument("--attempt", type=int, default=0)
     runner.add_argument("command", nargs=argparse.REMAINDER)
 
     evidence = groups.add_parser("evidence", help="verify task evidence")
@@ -168,6 +174,7 @@ def _build_parser() -> argparse.ArgumentParser:
     preflight.add_argument("--pnpm")
     preflight.add_argument("--require", action="append", default=[])
     preflight.add_argument("--output", type=Path)
+    preflight.add_argument("--task-id")
     handshake = runtime_sub.add_parser("handshake")
     handshake.add_argument("root", type=Path)
     handshake.add_argument("workflow", type=Path)
@@ -181,6 +188,7 @@ def _build_parser() -> argparse.ArgumentParser:
     role.add_argument("--role", required=True)
     role.add_argument("--product-pattern", action="append", default=[])
     role.add_argument("--authorized", action="store_true")
+    role.add_argument("--task-id")
 
     lifecycle = groups.add_parser("lifecycle", help="derive structured workflow state")
     lifecycle_sub = lifecycle.add_subparsers(dest="action", required=True)
@@ -260,7 +268,376 @@ def _command_result(result: dict[str, object]) -> int:
     return int(result["status_code"])  # type: ignore[arg-type]
 
 
-def main(argv: list[str] | None = None) -> int:
+def _auto_metrics_enabled() -> bool:
+    """Return whether automatic workflow metrics are enabled."""
+    value = os.environ.get("PIPELINE_TOOLS_DISABLE_AUTO_METRICS", "")
+    return value.strip().lower() not in {"1", "true", "yes", "on"}
+
+
+def _git_root(start: Path) -> Path:
+    """Find the nearest Git project, falling back to the supplied directory."""
+    value = start.resolve()
+    if value.is_file():
+        value = value.parent
+    for candidate in (value, *value.parents):
+        if (candidate / ".git").exists():
+            return candidate
+    return value
+
+
+def _safe_project_reference(root: Path, value: Path | None) -> str | None:
+    """Convert an in-project path to a relative metric evidence reference."""
+    if value is None:
+        return None
+    try:
+        reference = value.resolve().relative_to(root.resolve()).as_posix()
+        if any(_SENSITIVE_COMPONENT_RE.search(part) for part in Path(reference).parts):
+            return None
+        return reference
+    except (OSError, ValueError):
+        return None
+
+
+def _path_arg(args: argparse.Namespace, name: str) -> Path | None:
+    value = getattr(args, name, None)
+    if isinstance(value, Path):
+        return value
+    if isinstance(value, str):
+        return Path(value)
+    return None
+
+
+def _int_arg(args: argparse.Namespace, name: str, default: int = 0) -> int:
+    value = getattr(args, name, default)
+    return value if isinstance(value, int) and not isinstance(value, bool) else default
+
+
+def _task_id_from_path(value: Path | None) -> str | None:
+    """Extract a task id from the conventional .workflow/<task-id>/ path."""
+    if value is None:
+        return None
+    parts = value.resolve().parts
+    try:
+        index = next(index for index, part in enumerate(parts) if part == ".workflow")
+    except StopIteration:
+        return None
+    if index + 1 >= len(parts) or parts[index + 1] == "metrics":
+        return None
+    return _safe_task_id(parts[index + 1])
+
+
+_SENSITIVE_COMPONENT_RE = re.compile(r"(?i)(?:secret|token|password|api[_-]?key)")
+
+
+def _safe_task_id(value: str) -> str:
+    return value if not any(_SENSITIVE_COMPONENT_RE.search(part) for part in Path(value).parts) else "unknown"
+
+
+def _arg_value(args: argparse.Namespace, name: str, default: object = None) -> object:
+    return getattr(args, name, default)
+
+
+def _metric_result(exit_code: int) -> str:
+    if exit_code == 0:
+        return "pass"
+    if exit_code == BLOCKED:
+        return "blocked"
+    return "fail"
+
+
+def _auto_stage_name(args: argparse.Namespace) -> str | None:
+    group = getattr(args, "group", None)
+    action = getattr(args, "action", None)
+    if not group or group == "metrics":
+        return None
+    if group == "help":
+        return "cli_help"
+    if group in {"preflight", "freeze-check"}:
+        return f"task_{group.replace('-', '_')}"
+    if group == "command":
+        return "command_run"
+    if group == "scope":
+        return "scope_check"
+    if group == "task":
+        return f"task_{str(action).replace('-', '_')}"
+    if group == "runtime":
+        return f"runtime_{str(action).replace('-', '_')}"
+    if group == "lifecycle":
+        return "lifecycle_status"
+    if group == "dispatch":
+        return "dispatch_write"
+    if group == "result":
+        return "result_verify"
+    if group == "freshness":
+        return "freshness"
+    if group in {"evidence", "gate"}:
+        return f"{group}_{str(action).replace('-', '_')}"
+    return None
+
+
+def _arg_task_id(args: argparse.Namespace) -> str:
+    return _safe_task_id(str(getattr(args, "task_id", "unknown") or "unknown"))
+
+
+def _raw_stage_args(argv: list[str]) -> argparse.Namespace | None:
+    """Best-effort stage identity for argparse failures.
+
+    Full parsing intentionally remains authoritative for valid invocations.
+    This small scan exists only so a malformed non-metrics invocation still
+    leaves an automatic failure event instead of disappearing before the
+    normal parser can produce a namespace.
+    """
+    groups = {
+        "task", "preflight", "freeze-check", "scope", "command", "evidence",
+        "gate", "runtime", "lifecycle", "dispatch", "result", "freshness", "metrics",
+    }
+    index = 0
+    while index < len(argv):
+        token = argv[index]
+        if token in {"--format", "--output"}:
+            index += 2
+            continue
+        if token.startswith("--"):
+            index += 1
+            continue
+        if token not in groups:
+            index += 1
+            continue
+        group = token
+        action = None
+        if group in {"task", "scope", "command", "evidence", "gate", "runtime", "lifecycle", "dispatch", "result"}:
+            next_index = index + 1
+            while next_index < len(argv) and argv[next_index].startswith("--"):
+                next_index += 2 if "=" not in argv[next_index] else 1
+            if next_index < len(argv):
+                action = argv[next_index]
+        values: dict[str, object] = {"group": group, "action": action}
+        option_names = ("cwd", "log", "task-id", "attempt", "root", "directory", "workflow", "path", "result")
+        cursor = index + 1
+        while cursor < len(argv):
+            token = argv[cursor]
+            matched = next((name for name in option_names if token == f"--{name}"), None)
+            if matched is not None and cursor + 1 < len(argv):
+                value: object = argv[cursor + 1]
+                if matched in {"cwd", "log", "root", "directory", "workflow", "path", "result"}:
+                    value = Path(str(value))
+                elif matched in {"attempt"}:
+                    try:
+                        value = int(str(value))
+                    except ValueError:
+                        value = 0
+                values[matched.replace("-", "_")] = value
+                cursor += 2
+                continue
+            cursor += 1
+        return argparse.Namespace(**values)
+    # A completely malformed invocation still represents a non-metrics CLI
+    # attempt. Keep the attribution intentionally unknown rather than dropping
+    # the sample.
+    return argparse.Namespace(group="unknown", action=None)
+
+
+def _auto_root_and_reference(args: argparse.Namespace) -> tuple[Path, str | None]:
+    group = getattr(args, "group", None)
+    if group in {"preflight", "freeze-check", "scope", "runtime", "lifecycle"}:
+        root = _git_root(Path(args.root))
+        if group == "runtime" and args.action == "handshake":
+            workflow = _path_arg(args, "workflow")
+            artifact = workflow / "capability-handshake.json" if workflow else None
+            return root, _safe_project_reference(root, artifact)
+        if group == "runtime" and args.action == "preflight":
+            return root, _safe_project_reference(root, _path_arg(args, "output"))
+        if group == "lifecycle":
+            return root, _safe_project_reference(root, _path_arg(args, "evidence"))
+        if group in {"scope", "runtime"}:
+            return root, None
+        return root, None
+    if group == "task" and args.action == "validate":
+        path = Path(args.path)
+        root = _git_root(path)
+        return root, _safe_project_reference(root, path)
+    if group == "task" and args.action in {"preflight", "freeze-check"}:
+        root = _git_root(Path(args.root))
+        return root, _safe_project_reference(root, _path_arg(args, "task_sheet"))
+    if group == "command":
+        cwd = _path_arg(args, "cwd") or Path.cwd()
+        log = _path_arg(args, "log")
+        if log is not None and not log.is_absolute():
+            log = cwd / log
+        root = _git_root(cwd)
+        return root, _safe_project_reference(root, log)
+    if group in {"evidence", "gate"}:
+        directory = Path(args.directory)
+        root = _git_root(directory)
+        return root, _safe_project_reference(root, directory)
+    if group == "dispatch":
+        root = _git_root(Path(args.output))
+        return root, _safe_project_reference(root, Path(args.output))
+    if group == "result":
+        path = Path(args.path)
+        root = _git_root(path)
+        return root, _safe_project_reference(root, path)
+    if group == "freshness":
+        root = _git_root(Path(args.root))
+        return root, _safe_project_reference(root, _path_arg(args, "result"))
+    return _git_root(Path.cwd()), None
+
+
+def _auto_task_id(args: argparse.Namespace, root: Path) -> str:
+    value = _arg_value(args, "task_id")
+    if isinstance(value, str) and value:
+        return _safe_task_id(value)
+    group = getattr(args, "group", None)
+    if group == "scope":
+        return _arg_task_id(args)
+    if group == "runtime" and args.action in {"preflight", "role-scope"}:
+        return _arg_task_id(args)
+    if group in {"evidence", "gate"}:
+        return _safe_task_id(str(args.task_id))
+    if group == "result":
+        try:
+            data = json.loads(Path(args.path).read_text(encoding="utf-8"))
+            if isinstance(data, dict) and isinstance(data.get("task_id"), str):
+                return _safe_task_id(data["task_id"])
+        except (OSError, json.JSONDecodeError):
+            pass
+    if group == "command":
+        log = _path_arg(args, "log")
+        cwd = _path_arg(args, "cwd") or Path.cwd()
+        if log is not None and not log.is_absolute():
+            log = cwd / log
+        task_id = _task_id_from_path(log)
+        if task_id:
+            return task_id
+    if group == "task" and args.action in {"validate", "preflight", "freeze-check"}:
+        try:
+            from .contract import load_contract
+
+            task_path = _path_arg(args, "path") if args.action == "validate" else _path_arg(args, "task_sheet")
+            if task_path is not None:
+                contract, _errors = load_contract(task_path)
+                if contract and isinstance(contract.get("task_id"), str):
+                    return _safe_task_id(contract["task_id"])
+        except (OSError, UnicodeError):
+            pass
+    if group in {"preflight", "freeze-check"} and args.task_sheet:
+        try:
+            from .contract import load_contract
+
+            contract, _errors = load_contract(Path(args.task_sheet))
+            if contract and isinstance(contract.get("task_id"), str):
+                return _safe_task_id(contract["task_id"])
+        except (OSError, UnicodeError):
+            pass
+    if group == "runtime" and args.action == "handshake":
+        workflow = _path_arg(args, "workflow")
+        task_id = _task_id_from_path(workflow)
+        return _safe_task_id(task_id or (workflow.name if workflow else "unknown"))
+    if group == "dispatch":
+        try:
+            data = json.loads(Path(args.input).read_text(encoding="utf-8"))
+            if isinstance(data, dict) and isinstance(data.get("task_id"), str):
+                return _safe_task_id(data["task_id"])
+        except (OSError, json.JSONDecodeError):
+            pass
+    if group == "freshness":
+        result = _path_arg(args, "result")
+        if result:
+            try:
+                data = json.loads(result.read_text(encoding="utf-8"))
+                if isinstance(data, dict) and isinstance(data.get("task_id"), str):
+                    return _safe_task_id(data["task_id"])
+            except (OSError, json.JSONDecodeError):
+                pass
+    return "unknown"
+
+
+def _auto_feedback_events(args: argparse.Namespace, exit_code: int) -> list[tuple[str, str, str | None]]:
+    """Derive feedback only from structured command outcomes."""
+    group = getattr(args, "group", None)
+    action = getattr(args, "action", None)
+    feedback: list[tuple[str, str, str | None]] = []
+    if group == "command" and exit_code == BLOCKED:
+        feedback.append(("timeout", "blocked", "command_timeout"))
+    if group == "command" and _int_arg(args, "attempt") > 0:
+        feedback.append(("retry", "unknown", f"attempt_{_int_arg(args, 'attempt')}"))
+    if group == "runtime" and action in {"preflight", "handshake"} and exit_code == BLOCKED:
+        feedback.append(("environment_block", "blocked", "runtime_check_failed"))
+    if group in {"evidence", "gate", "freshness"} and exit_code != 0:
+        feedback.append(("evidence_gap", "blocked", f"{group}_{action}_failed"))
+    if group == "scope" and exit_code != 0:
+        feedback.append(("scope_drift", "fail", "scope_check_failed"))
+    if group == "runtime" and action == "role-scope" and exit_code != 0:
+        feedback.append(("main_agent_product_edit", "fail", "role_scope_drift"))
+    return feedback
+
+
+def _record_automatic_metrics(argv: list[str], exit_code: int, duration_s: float | None = None) -> list[Path]:
+    """Record a stage result and machine-derived feedback for one CLI call."""
+    if not _auto_metrics_enabled():
+        return []
+    try:
+        parsed = _build_parser().parse_args(argv)
+    except SystemExit:
+        if exit_code == 0 and any(token in {"-h", "--help"} for token in argv):
+            parsed = argparse.Namespace(group="help", action=None)
+        else:
+            parsed = _raw_stage_args(argv)
+        if parsed is None:
+            return []
+    stage = _auto_stage_name(parsed)
+    if stage is None and getattr(parsed, "group", None) in {"unknown", "help"}:
+        stage = "cli_parse_error"
+    if stage is None:
+        return []
+    try:
+        root, evidence_ref = _auto_root_and_reference(parsed)
+        task_id = _auto_task_id(parsed, root)
+    except Exception:
+        root, evidence_ref, task_id = _git_root(Path.cwd()), None, "unknown"
+    result = _metric_result(exit_code)
+    blocker = "environment" if exit_code == BLOCKED else None
+    if parsed.group in {"evidence", "gate", "freshness"} and exit_code != 0:
+        blocker = "evidence"
+    if parsed.group == "runtime" and parsed.action == "role-scope" and exit_code != 0:
+        blocker = "workflow"
+    recorded: list[Path] = []
+    try:
+        recorded.append(metric_event(root, {
+            "event": stage,
+            "confidence": "observed",
+            "task_id": task_id,
+            "result": result,
+            "duration_s": duration_s,
+            "timed_out": parsed.group == "command" and exit_code == BLOCKED,
+            "attempt": _int_arg(parsed, "attempt"),
+            "reason": None if exit_code == 0 else f"exit_code_{exit_code}",
+            "evidence_ref": evidence_ref,
+            "blocker_class": blocker,
+            "source": "pipeline_tools",
+        }))
+        for event, event_result, reason in _auto_feedback_events(parsed, exit_code):
+            recorded.append(metric_event(root, {
+                "event": event,
+                "confidence": "derived",
+                "task_id": task_id,
+                "result": event_result,
+                "reason": reason,
+                "timed_out": event == "timeout",
+                "attempt": _int_arg(parsed, "attempt"),
+                "evidence_ref": evidence_ref,
+                "blocker_class": "workflow" if event in {"retry", "scope_drift", "main_agent_product_edit"} else "evidence" if event == "evidence_gap" else "environment" if event in {"timeout", "environment_block"} else None,
+                "source": "pipeline_tools",
+            }))
+    except Exception as error:
+        # Metrics are feedback, not an acceptance gate.  A read-only project
+        # must not change the original command's result.
+        print(f"WARNING: automatic metrics unavailable ({type(error).__name__})", file=sys.stderr)
+        return recorded
+    return recorded
+
+
+def _main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     try:
         args = parser.parse_args(argv)
@@ -401,6 +778,28 @@ def main(argv: list[str] | None = None) -> int:
         print(f"FAIL: {type(exc).__name__}", file=sys.stderr)
         return CONFIG
     return CONFIG
+
+
+def main(argv: list[str] | None = None) -> int:
+    actual_argv = list(sys.argv[1:] if argv is None else argv)
+    exit_code: int | None = None
+    started = time.monotonic()
+    try:
+        exit_code = _main(actual_argv)
+        return exit_code
+    except SystemExit as error:
+        code = error.code
+        exit_code = code if isinstance(code, int) else CONFIG
+        return exit_code
+    finally:
+        if exit_code is not None:
+            try:
+                _record_automatic_metrics(actual_argv, exit_code, round(time.monotonic() - started, 3))
+            except BaseException:
+                # Automatic feedback must never replace the original command
+                # result, including when attribution or filesystem probing
+                # fails during finalization.
+                pass
 
 
 if __name__ == "__main__":

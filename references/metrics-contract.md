@@ -1,6 +1,27 @@
 # 项目级反馈事件契约
 
-项目级反馈是从任务证据派生的本地统计，不是验收证据，不回写任务契约、技能规则或产品数据。目录固定为项目根目录的 `.workflow/metrics/`，必须由项目 `.gitignore` 忽略。
+项目级反馈是从 `pipeline-tools` 的机械执行结果派生的、可审查的流程统计，不是验收证据，不回写任务契约、技能规则或产品数据。目录固定为项目根目录的 `.workflow/metrics/`，默认由工具自动创建并写入；指标文件应纳入 Git 追踪，不应加入项目 `.gitignore`。
+
+## 自动采集边界
+
+除 `metrics` 子命令外，每次 `pipeline-tools` 阶段调用都会写入一个 `observed` 阶段结果事件。事件记录只基于本次命令的结构化退出码和参数：
+
+- `pass`：命令退出码为 0；
+- `fail`：命令返回产品、契约或范围等非零失败；
+- `blocked`：命令超时或工具报告环境/证据阻塞。
+
+工具还可以根据机械结果追加 `derived` 反馈事件，例如 `timeout`、`environment_block`、
+`evidence_gap`、`scope_drift`、`main_agent_product_edit` 和 `retry`。这些事件不等价于
+产品验收结论。自动采集失败不得改变原命令的退出码；写入失败必须作为未采集问题留在
+诊断中，而不能伪造指标。
+
+阶段事件名按命令族稳定生成，例如 `task_validate`、`command_run`、`scope_check`、
+`runtime_handshake`、`lifecycle_status`、`dispatch_write`、`result_verify`、`freshness`、
+`evidence_verify`、`gate_pre_merge` 和 `cli_parse_error`。聚合器保留未知阶段名的计数，
+避免增加新机械命令时丢失历史。
+
+使用 `PIPELINE_TOOLS_DISABLE_AUTO_METRICS=1` 仅用于工具测试或明确的诊断场景。关闭自动
+采集的调用不应被当作完整的流程统计样本。
 
 ## 可信度与来源
 
@@ -14,7 +35,7 @@
 
 ## 事件文件
 
-每次 `metrics record` 写一个独立 JSON 文件，先写同目录临时文件再原子替换。每个事件只允许以下字段：
+每次自动采集或 `metrics record` 写一个独立 JSON 文件，先写同目录临时文件再原子替换。每个事件只允许以下字段：
 
 ```json
 {
@@ -60,6 +81,7 @@
 | `user_continue_nudge` | 用户要求继续推进已开始的任务 |
 | `user_process_correction` | 用户纠正停滞、角色或流程行为 |
 | `recovery_path_miss` | 恢复阶段读取了不存在或错误路径 |
+| `scope_drift` | 机械范围检查发现越界或禁止路径 |
 
 `aggregate`、`report` 和 `export` 只从事件文件重建摘要，至少输出成功率、reported 排除数量、token 已知/未知数量、阻塞类型计数、用户流程纠正、主代理产品修改，以及上表的事件计数。聚合文件可以删除后重建。
 
@@ -72,5 +94,8 @@
 - 改写任务契约、产品设计或技能规则；
 - 上传数据或访问网络；
 - 把单次样本当成趋势。
+
+指标事件文件是工作流审计的一部分，可以与任务单、报告和命令日志一同提交；其中的
+`evidence_ref` 必须仍是项目内相对路径，提交前应检查没有敏感信息。
 
 评估节省 token 的流程优化时，至少同时观察证据缺口、审查推翻、合并后回归和高等级验收数量；任一恶化时，不能把 token 下降判为成功。

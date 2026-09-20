@@ -13,7 +13,7 @@
 
 - 任务单：`docs/tasks/<task-id>.md`
 - 任务证据：`.workflow/<task-id>/`
-- 项目级本地统计：`.workflow/metrics/`（必须未跟踪）
+- 项目级统计：`.workflow/metrics/`（由工具自动生成并纳入 Git 追踪）
 - 任务契约提交后冻结
 - 合并前需要执行、独立审查和主代理终检；合并后在主工作树复验
 
@@ -38,14 +38,23 @@ python -m pipeline_tools gate post-merge .workflow/<task-id> --task-id <task-id>
 
 ## 项目级反馈
 
+除 `metrics` 子命令外，所有 `pipeline-tools` 阶段命令默认自动记录一个结构化指标事件到
+目标项目的 `.workflow/metrics/`。指标文件是可审查的工作流历史，应纳入 Git；不要把该目录
+加入项目的 `.gitignore`。自动采集只使用命令退出码、结构化结果和可定位的证据路径，不会从
+自然语言报告推断产品结论，也不会记录 token、凭据、完整命令输出或业务数据。
+
+自动采集可以通过环境变量 `PIPELINE_TOOLS_DISABLE_AUTO_METRICS=1` 暂时关闭（仅用于测试或
+明确的诊断场景）；正常任务执行不要关闭。`metrics` 子命令本身不递归生成阶段事件，但
+`metrics record` 仍可用于补充经过直接证据确认的事件。
+
 ```bash
 python -m pipeline_tools metrics record . retry --confidence observed --task-id <task-id> --result unknown --attempt 1
 python -m pipeline_tools metrics report .
 python -m pipeline_tools metrics export . .workflow/metrics-summary.json
 python -m pipeline_tools metrics purge .
 python -m pipeline_tools metrics import-opencode-session . <session-export.json> --task-id <task-id>
-python -m pipeline_tools runtime preflight . --node 22.23.2 --pnpm 9.15.4
-python -m pipeline_tools runtime handshake . .workflow/<task-id> --role reviewer --node 22.23.2 --pnpm 9.15.4
+python -m pipeline_tools runtime preflight . --node 22.23.2 --pnpm 10.27.0
+python -m pipeline_tools runtime handshake . .workflow/<task-id> --role reviewer --node 22.23.2 --pnpm 10.27.0
 python -m pipeline_tools runtime role-scope . --role main-agent --product-pattern 'packages/**'
 python -m pipeline_tools --format json --output .workflow/<task-id>/task-validate.json task validate docs/tasks/<task-id>.md
 python -m pipeline_tools --format json lifecycle status . --task-id <task-id> --evidence .workflow/<task-id>
@@ -54,7 +63,7 @@ python -m pipeline_tools result verify .workflow/<task-id>/reviewer-result.json 
 python -m pipeline_tools --format json freshness . .workflow/<task-id> --result .workflow/<task-id>/reviewer-result.json
 ```
 
-事件逐文件原子写入 `.workflow/metrics/`。只有 `observed` 和 `derived` 进入核心聚合；`reported` 只留作追溯。详见 `references/metrics-contract.md`。
+自动事件和 `metrics record` 事件都逐文件原子写入 `.workflow/metrics/`。只有 `observed` 和 `derived` 进入核心聚合；`reported` 只留作追溯。详见 `references/metrics-contract.md`。
 
 `metrics import-opencode-session` 只从 OpenCode Desktop 的结构化导出中提取可验证的工具错误、子代理错误和用户流程纠正信号；不会把自然语言 PASS 当作验收事实。`runtime preflight` 应在派发 executor/reviewer 前执行，`runtime role-scope` 用于阻止未授权的主代理产品代码修改。
 

@@ -33,4 +33,34 @@ class GitChecks(unittest.TestCase):
             absolute_pattern = str((p/'ok.txt')).replace('\\\\','/')
             self.assertEqual(scope_check(p,[absolute_pattern],[]),[])
 
+    def test_generated_metrics_are_not_scope_drift(self):
+        with tempfile.TemporaryDirectory() as d:
+            p=Path(d); subprocess.run(['git','init'],cwd=p,capture_output=True)
+            metrics = p / '.workflow' / 'metrics'
+            metrics.mkdir(parents=True)
+            (metrics / 'event.json').write_text('{}')
+            self.assertEqual(scope_check(p,['src/**'],[]),[])
+
+    def test_forbidden_metrics_pattern_still_wins(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d); subprocess.run(['git','init'],cwd=p,capture_output=True)
+            metrics = p / '.workflow' / 'metrics'
+            metrics.mkdir(parents=True)
+            (metrics / 'event.json').write_text('{}')
+            self.assertEqual(scope_check(p,['src/**'],['.workflow/metrics/**']), ['.workflow/metrics/event.json'])
+
+    def test_tracked_metrics_are_workflow_metadata(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d); subprocess.run(['git','init'],cwd=p,capture_output=True)
+            subprocess.run(['git','config','user.email','test@example.invalid'],cwd=p)
+            subprocess.run(['git','config','user.name','Test'],cwd=p)
+            metrics = p / '.workflow' / 'metrics'
+            metrics.mkdir(parents=True)
+            event = metrics / 'event.json'
+            event.write_text('{}')
+            subprocess.run(['git','add','.'],cwd=p,check=True,capture_output=True)
+            subprocess.run(['git','commit','-m','metrics'],cwd=p,check=True,capture_output=True)
+            event.write_text('{"changed":true}')
+            self.assertEqual(scope_check(p,['src/**'],[]),[])
+
 if __name__=='__main__': unittest.main()
