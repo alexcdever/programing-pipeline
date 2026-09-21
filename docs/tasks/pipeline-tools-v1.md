@@ -20,7 +20,7 @@
 
 ### 允许修改
 
-- 新建 `D:/Projects/Skills/programing-pipeline-tools/**`：命令程序、测试、文档、启动包装器和任务级证据。
+- `programing-pipeline/**` 内置工具、测试、文档、启动包装器和任务级证据。
 - `programing-pipeline/SKILL.md`：增加最小工具调用契约和机械检查边界。
 - `programing-pipeline/README.md`：增加工具安装、调用和项目数据目录说明。
 - `programing-pipeline/references/metrics-contract.md`：定义项目级统计事件、脱敏、可信度和禁止反馈回写规则。
@@ -71,7 +71,11 @@
   "schema": 1,
   "task_id": "pipeline-tools-v1",
   "allowed_paths": [
-    "D:/Projects/Skills/programing-pipeline-tools/**",
+    "pipeline_tools/**",
+    "tests/**",
+    "bin/**",
+    "templates/**",
+    "docs/tasks/pipeline-tools-v1-continuation-1.md",
     "SKILL.md",
     "README.md",
     "references/metrics-contract.md",
@@ -189,7 +193,7 @@
 - 基线 HEAD：88c75d3cd8a7d315ef52cf98686c555db0f1252e
 - 契约提交：d9a4909
 - 执行分支：pipeline-tools-v1
-- 执行 worktree：D:/Projects/Skills/programing-pipeline-tools
+- 执行 worktree：D:/Projects/Skills/programing-pipeline
 
 ### 验收台账
 

@@ -106,7 +106,7 @@ class CLITests(unittest.TestCase):
 
     def test_metrics_roundtrip_and_purge(self):
         with tempfile.TemporaryDirectory() as d:
-            root = Path(d)
+            root, _head = make_repo(d)
             p = run_cli(['metrics', 'record', str(root), 'test', '--confidence', 'observed',
                          '--task-id', 'demo', '--result', 'pass'])
             self.assertEqual(p.returncode, 0, (p.stdout, p.stderr))
@@ -119,7 +119,7 @@ class CLITests(unittest.TestCase):
 
     def test_workflow_command_automatically_records_tracked_metric(self):
         with tempfile.TemporaryDirectory() as d:
-            root = Path(d)
+            root, _ = make_repo(d)
             task = root / 'task.md'
             task.write_text('''# Demo\n<!-- Task ID: demo -->\n```pipeline-contract\n{"schema":1,"task_id":"demo","allowed_paths":["src/**"],"forbidden_paths":[],"acceptance_tests":[{"id":"AT1","evidence_level":1,"test_ref":"tests/x.py","command_ref":"python -m unittest"}]}\n```\n''', encoding='utf-8')
             p = run_cli(['task', 'validate', str(task)], env={'PIPELINE_TOOLS_DISABLE_AUTO_METRICS': '0'})
@@ -271,9 +271,25 @@ class CLITests(unittest.TestCase):
             self.assertEqual(value['status'], 'not_ready')
             self.assertIn('final-check.md', value['missing'])
 
-    def test_automatic_events_carry_task_and_evidence_identity(self):
+    def test_evidence_readiness_records_not_ready_feedback(self):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
+            evidence = root / '.workflow' / 'demo'
+            evidence.mkdir(parents=True)
+            p = run_cli(
+                ['--format', 'json', 'evidence', 'readiness', str(evidence), '--task-id', 'demo'],
+                env={'PIPELINE_TOOLS_DISABLE_AUTO_METRICS': '0'},
+            )
+            self.assertEqual(p.returncode, 3, (p.stdout, p.stderr))
+            values = [json.loads(path.read_text(encoding='utf-8')) for path in (root / '.workflow' / 'metrics').glob('*.json')]
+            self.assertEqual({value['event'] for value in values}, {'evidence_readiness', 'evidence_not_ready'})
+            derived = next(value for value in values if value['event'] == 'evidence_not_ready')
+            self.assertEqual(derived['confidence'], 'derived')
+            self.assertEqual(derived['blocker_class'], 'evidence')
+
+    def test_automatic_events_carry_task_and_evidence_identity(self):
+        with tempfile.TemporaryDirectory() as d:
+            root, _head = make_repo(d)
             task = root / 'task.md'
             task.write_text('''# Demo\n<!-- Task ID: demo -->\n```pipeline-contract\n{"schema":1,"task_id":"demo","allowed_paths":["src/**"],"forbidden_paths":[],"acceptance_tests":[{"id":"AT1","evidence_level":1,"test_ref":"tests/x.py","command_ref":"python -m unittest"}]}\n```\n''', encoding='utf-8')
             p = run_cli(['task', 'validate', str(task)], env={'PIPELINE_TOOLS_DISABLE_AUTO_METRICS': '0'})
@@ -282,6 +298,10 @@ class CLITests(unittest.TestCase):
             self.assertEqual(value['task_id'], 'demo')
             self.assertEqual(value['evidence_root'], None)
             self.assertFalse(value['terminal'])
+            self.assertTrue(value['run_id'].startswith('demo-'))
+            self.assertEqual(value['phase'], 'contract')
+            self.assertIsNotNone(value['head'])
+            self.assertIsNotNone(value['branch'])
 
     def test_runtime_preflight_and_role_scope(self):
         with tempfile.TemporaryDirectory() as d:

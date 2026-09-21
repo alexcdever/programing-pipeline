@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import re
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -316,6 +317,9 @@ def _git_root(start: Path) -> Path:
     for candidate in (value, *value.parents):
         if (candidate / ".git").exists():
             return candidate
+    if ".workflow" in value.parts:
+        workflow_index = value.parts.index(".workflow")
+        return Path(*value.parts[:workflow_index])
     return value
 
 
@@ -365,6 +369,83 @@ _SENSITIVE_COMPONENT_RE = re.compile(r"(?i)(?:secret|token|password|api[_-]?key)
 
 def _safe_task_id(value: str) -> str:
     return value if not any(_SENSITIVE_COMPONENT_RE.search(part) for part in Path(value).parts) else "unknown"
+
+
+def _git_metadata(root: Path) -> tuple[str | None, str | None]:
+    """Read short Git identity without putting an absolute path in metrics."""
+    try:
+        head = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--short=12", "HEAD"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
+        )
+        branch = subprocess.run(
+            ["git", "-C", str(root), "branch", "--show-current"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
+        )
+        return (
+            head.stdout.strip() if head.returncode == 0 else None,
+            branch.stdout.strip() if branch.returncode == 0 else None,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None, None
+
+
+def _auto_run_id(args: argparse.Namespace, root: Path, task_id: str) -> str:
+    explicit = _arg_value(args, "run_id") or os.environ.get("PIPELINE_TOOLS_RUN_ID")
+    if isinstance(explicit, str) and explicit:
+        return explicit
+    head, _branch = _git_metadata(root)
+    return f"{task_id}-{head or 'nogit'}"
+
+
+def _auto_phase(args: argparse.Namespace) -> str | None:
+    explicit = _arg_value(args, "phase")
+    if isinstance(explicit, str) and explicit:
+        return explicit
+    group = getattr(args, "group", None)
+    action = getattr(args, "action", None)
+    if group in {"task", "preflight", "freeze-check"}:
+        return "contract"
+    if group == "command":
+        return "execution"
+    if group == "runtime":
+        return "runtime"
+    if group == "scope":
+        return "scope"
+    if group in {"evidence", "freshness"}:
+        return "evidence"
+    if group == "result":
+        return "review"
+    if group == "gate":
+        return "post-merge" if action == "post-merge" else "main-final"
+    if group == "lifecycle":
+        return "lifecycle"
+    if group == "dispatch":
+        return "dispatch"
+    return None
+
+
+def _auto_role(args: argparse.Namespace) -> str | None:
+    explicit = _arg_value(args, "role")
+    if isinstance(explicit, str) and explicit:
+        return explicit
+    group = getattr(args, "group", None)
+    if group == "gate":
+        return "main-final"
+    return None
+
+
+def _evidence_root_from_reference(reference: str | None) -> str | None:
+    if not reference:
+        return None
+    parts = Path(reference).parts
+    try:
+        index = parts.index(".workflow")
+    except ValueError:
+        return None
+    if index + 1 >= len(parts) or parts[index + 1] == "metrics":
+        return None
+    return Path(*parts[: index + 2]).as_posix()
 
 
 def _arg_value(args: argparse.Namespace, name: str, default: object = None) -> object:
@@ -632,6 +713,11 @@ def _record_automatic_metrics(argv: list[str], exit_code: int, duration_s: float
     except Exception:
         root, evidence_ref, task_id = _git_root(Path.cwd()), None, "unknown"
     result = _metric_result(exit_code)
+    head, branch = _git_metadata(root)
+    run_id = _auto_run_id(parsed, root, task_id)
+    phase = _auto_phase(parsed)
+    role = _auto_role(parsed)
+    evidence_root = _evidence_root_from_reference(evidence_ref)
     blocker = "environment" if exit_code == BLOCKED else None
     if parsed.group in {"evidence", "gate", "freshness"} and exit_code != 0:
         blocker = "evidence"
@@ -651,12 +737,12 @@ def _record_automatic_metrics(argv: list[str], exit_code: int, duration_s: float
             "evidence_ref": evidence_ref,
             "blocker_class": blocker,
             "source": "pipeline_tools",
-            "run_id": _arg_value(parsed, "run_id"),
-            "phase": _arg_value(parsed, "phase"),
-            "role": _arg_value(parsed, "role"),
-            "head": _arg_value(parsed, "head"),
-            "branch": _arg_value(parsed, "branch"),
-            "evidence_root": evidence_ref if parsed.group in {"evidence", "gate"} else None,
+            "run_id": run_id,
+            "phase": phase,
+            "role": role,
+            "head": head,
+            "branch": branch,
+            "evidence_root": evidence_root,
             "terminal": parsed.group == "gate" and exit_code == 0,
             "supersedes": None,
         }))
@@ -670,14 +756,14 @@ def _record_automatic_metrics(argv: list[str], exit_code: int, duration_s: float
                 "timed_out": event == "timeout",
                 "attempt": _int_arg(parsed, "attempt"),
                 "evidence_ref": evidence_ref,
-                "blocker_class": "workflow" if event in {"retry", "scope_drift", "main_agent_product_edit"} else "evidence" if event == "evidence_gap" else "environment" if event in {"timeout", "environment_block"} else None,
+                "blocker_class": "workflow" if event in {"retry", "scope_drift", "main_agent_product_edit"} else "evidence" if event in {"evidence_gap", "evidence_not_ready"} else "environment" if event in {"timeout", "environment_block"} else None,
                 "source": "pipeline_tools",
-                "run_id": _arg_value(parsed, "run_id"),
-                "phase": _arg_value(parsed, "phase"),
-                "role": _arg_value(parsed, "role"),
-                "head": _arg_value(parsed, "head"),
-                "branch": _arg_value(parsed, "branch"),
-                "evidence_root": evidence_ref if parsed.group in {"evidence", "gate"} else None,
+                "run_id": run_id,
+                "phase": phase,
+                "role": role,
+                "head": head,
+                "branch": branch,
+                "evidence_root": evidence_root,
                 "terminal": False,
                 "supersedes": None,
             }))

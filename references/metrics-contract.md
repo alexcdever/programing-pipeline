@@ -84,6 +84,7 @@
 | `retry` | 同一冻结契约下再次执行 |
 | `timeout` | 有界命令或任务超时 |
 | `evidence_gap` | 缺命令、退出码、产物、身份或新鲜证据 |
+| `evidence_not_ready` | evidence readiness 发现正式验证所需材料尚未齐备；不是产品失败 |
 | `post_merge_regression` | 合并后复验推翻 worktree 结论 |
 | `environment_block` | runtime、Node/pnpm、native ABI 或测试能力不可用 |
 | `permission_block` | OpenCode 工具/代理权限阻止了所需操作 |

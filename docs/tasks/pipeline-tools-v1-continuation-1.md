@@ -153,6 +153,12 @@
       "evidence_level": 1,
       "test_ref": "tests/test_metrics.py and tests/test_cli.py: metric run/terminal identity dimensions",
       "command_ref": "python -m unittest tests.test_metrics.MetricsTests.test_metric_event_preserves_run_and_terminal_dimensions tests.test_cli.CLITests.test_automatic_events_carry_task_and_evidence_identity"
+    },
+    {
+      "id": "AT9",
+      "evidence_level": 1,
+      "test_ref": "tests/test_cli.py: test_evidence_readiness_records_not_ready_feedback",
+      "command_ref": "python -m unittest tests.test_cli.CLITests.test_evidence_readiness_records_not_ready_feedback"
     }
   ]
 }
