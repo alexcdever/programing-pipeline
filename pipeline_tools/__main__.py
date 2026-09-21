@@ -26,6 +26,7 @@ from .core import (
     capability_handshake,
     lifecycle_status,
     evidence_freshness,
+    evidence_readiness,
     verify_structured_result,
     write_dispatch,
     purge_metrics,
@@ -43,6 +44,7 @@ def _add_contract_command(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--expected-head")
     parser.add_argument("--expected-branch")
     parser.add_argument("--expected-worktree", type=Path)
+    parser.add_argument("--run-id")
 
 
 def _add_scope_args(parser: argparse.ArgumentParser) -> None:
@@ -52,6 +54,13 @@ def _add_scope_args(parser: argparse.ArgumentParser) -> None:
 
 def _flatten(values: list[list[str]]) -> list[str]:
     return [item for group in values for item in group]
+
+
+def _add_metrics_filters(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--task-id")
+    parser.add_argument("--run-id")
+    parser.add_argument("--terminal-only", action="store_true")
+    parser.add_argument("--no-derived", action="store_true")
 
 
 CONTRACT_PLACEHOLDER_TOKENS = (
@@ -108,6 +117,7 @@ def _build_parser() -> argparse.ArgumentParser:
     scope_check_parser = scope_sub.add_parser("check")
     scope_check_parser.add_argument("root", type=Path)
     scope_check_parser.add_argument("--task-id")
+    scope_check_parser.add_argument("--run-id")
     _add_scope_args(scope_check_parser)
 
     command = groups.add_parser("command", help="run a bounded command")
@@ -118,6 +128,7 @@ def _build_parser() -> argparse.ArgumentParser:
     runner.add_argument("--timeout", type=float, default=30)
     runner.add_argument("--task-id")
     runner.add_argument("--attempt", type=int, default=0)
+    runner.add_argument("--run-id")
     runner.add_argument("command", nargs=argparse.REMAINDER)
 
     evidence = groups.add_parser("evidence", help="verify task evidence")
@@ -126,6 +137,11 @@ def _build_parser() -> argparse.ArgumentParser:
     evidence_verify_parser.add_argument("directory", type=Path)
     evidence_verify_parser.add_argument("--task-id", required=True)
     evidence_verify_parser.add_argument("--branch")
+    evidence_verify_parser.add_argument("--run-id")
+    evidence_ready_parser = evidence_sub.add_parser("readiness")
+    evidence_ready_parser.add_argument("directory", type=Path)
+    evidence_ready_parser.add_argument("--task-id", required=True)
+    evidence_ready_parser.add_argument("--run-id")
 
     gate = groups.add_parser("gate", help="run merge gates")
     gate_sub = gate.add_subparsers(dest="action", required=True)
@@ -136,6 +152,7 @@ def _build_parser() -> argparse.ArgumentParser:
         item.add_argument("--branch")
         item.add_argument("--result", type=Path)
         item.add_argument("--role", choices=("executor", "reviewer"))
+        item.add_argument("--run-id")
 
     metrics = groups.add_parser("metrics", help="record and aggregate local metrics")
     metrics_sub = metrics.add_subparsers(dest="action", required=True)
@@ -153,12 +170,22 @@ def _build_parser() -> argparse.ArgumentParser:
     record.add_argument("--evidence-ref")
     record.add_argument("--blocker-class", choices=("product", "environment", "permission", "evidence", "dependency", "workflow"))
     record.add_argument("--source")
+    record.add_argument("--run-id")
+    record.add_argument("--phase")
+    record.add_argument("--role")
+    record.add_argument("--head")
+    record.add_argument("--branch")
+    record.add_argument("--evidence-root")
+    record.add_argument("--terminal", action="store_true")
+    record.add_argument("--supersedes")
     for name in ("aggregate", "report"):
         item = metrics_sub.add_parser(name)
         item.add_argument("root", type=Path)
+        _add_metrics_filters(item)
     export = metrics_sub.add_parser("export")
     export.add_argument("root", type=Path)
     export.add_argument("output", type=Path)
+    _add_metrics_filters(export)
     purge = metrics_sub.add_parser("purge")
     purge.add_argument("root", type=Path)
     session = metrics_sub.add_parser("import-opencode-session")
@@ -175,6 +202,7 @@ def _build_parser() -> argparse.ArgumentParser:
     preflight.add_argument("--require", action="append", default=[])
     preflight.add_argument("--output", type=Path)
     preflight.add_argument("--task-id")
+    preflight.add_argument("--run-id")
     handshake = runtime_sub.add_parser("handshake")
     handshake.add_argument("root", type=Path)
     handshake.add_argument("workflow", type=Path)
@@ -183,12 +211,14 @@ def _build_parser() -> argparse.ArgumentParser:
     handshake.add_argument("--pnpm")
     handshake.add_argument("--require", action="append", default=[])
     handshake.add_argument("--allow-product-write", action="store_true")
+    handshake.add_argument("--run-id")
     role = runtime_sub.add_parser("role-scope")
     role.add_argument("root", type=Path)
     role.add_argument("--role", required=True)
     role.add_argument("--product-pattern", action="append", default=[])
     role.add_argument("--authorized", action="store_true")
     role.add_argument("--task-id")
+    role.add_argument("--run-id")
 
     lifecycle = groups.add_parser("lifecycle", help="derive structured workflow state")
     lifecycle_sub = lifecycle.add_subparsers(dest="action", required=True)
@@ -196,22 +226,26 @@ def _build_parser() -> argparse.ArgumentParser:
     status.add_argument("root", type=Path)
     status.add_argument("--task-id", required=True)
     status.add_argument("--evidence", type=Path, required=True)
+    status.add_argument("--run-id")
 
     dispatch = groups.add_parser("dispatch", help="structured agent dispatch checks")
     dispatch_sub = dispatch.add_subparsers(dest="action", required=True)
     dispatch_write = dispatch_sub.add_parser("write")
     dispatch_write.add_argument("input", type=Path)
     dispatch_write.add_argument("output", type=Path)
+    dispatch_write.add_argument("--run-id")
     result = groups.add_parser("result", help="structured agent result checks")
     result_sub = result.add_subparsers(dest="action", required=True)
     result_verify = result_sub.add_parser("verify")
     result_verify.add_argument("path", type=Path)
     result_verify.add_argument("--task-id", required=True)
     result_verify.add_argument("--role", required=True, choices=("executor", "reviewer"))
+    result_verify.add_argument("--run-id")
     freshness = groups.add_parser("freshness", help="evidence freshness checks")
     freshness.add_argument("root", type=Path)
     freshness.add_argument("evidence", type=Path)
     freshness.add_argument("--result", type=Path, required=True)
+    freshness.add_argument("--run-id")
 
     return parser
 
@@ -563,7 +597,9 @@ def _auto_feedback_events(args: argparse.Namespace, exit_code: int) -> list[tupl
         feedback.append(("retry", "unknown", f"attempt_{_int_arg(args, 'attempt')}"))
     if group == "runtime" and action in {"preflight", "handshake"} and exit_code == BLOCKED:
         feedback.append(("environment_block", "blocked", "runtime_check_failed"))
-    if group in {"evidence", "gate", "freshness"} and exit_code != 0:
+    if group == "evidence" and action == "readiness" and exit_code != 0:
+        feedback.append(("evidence_not_ready", "blocked", "readiness_check_failed"))
+    elif group in {"evidence", "gate", "freshness"} and exit_code != 0:
         feedback.append(("evidence_gap", "blocked", f"{group}_{action}_failed"))
     if group == "scope" and exit_code != 0:
         feedback.append(("scope_drift", "fail", "scope_check_failed"))
@@ -615,6 +651,14 @@ def _record_automatic_metrics(argv: list[str], exit_code: int, duration_s: float
             "evidence_ref": evidence_ref,
             "blocker_class": blocker,
             "source": "pipeline_tools",
+            "run_id": _arg_value(parsed, "run_id"),
+            "phase": _arg_value(parsed, "phase"),
+            "role": _arg_value(parsed, "role"),
+            "head": _arg_value(parsed, "head"),
+            "branch": _arg_value(parsed, "branch"),
+            "evidence_root": evidence_ref if parsed.group in {"evidence", "gate"} else None,
+            "terminal": parsed.group == "gate" and exit_code == 0,
+            "supersedes": None,
         }))
         for event, event_result, reason in _auto_feedback_events(parsed, exit_code):
             recorded.append(metric_event(root, {
@@ -628,6 +672,14 @@ def _record_automatic_metrics(argv: list[str], exit_code: int, duration_s: float
                 "evidence_ref": evidence_ref,
                 "blocker_class": "workflow" if event in {"retry", "scope_drift", "main_agent_product_edit"} else "evidence" if event == "evidence_gap" else "environment" if event in {"timeout", "environment_block"} else None,
                 "source": "pipeline_tools",
+                "run_id": _arg_value(parsed, "run_id"),
+                "phase": _arg_value(parsed, "phase"),
+                "role": _arg_value(parsed, "role"),
+                "head": _arg_value(parsed, "head"),
+                "branch": _arg_value(parsed, "branch"),
+                "evidence_root": evidence_ref if parsed.group in {"evidence", "gate"} else None,
+                "terminal": False,
+                "supersedes": None,
             }))
     except Exception as error:
         # Metrics are feedback, not an acceptance gate.  A read-only project
@@ -669,6 +721,13 @@ def _main(argv: list[str] | None = None) -> int:
                 return CONFIG
             return _command_result(result)
         if args.group == "evidence":
+            if args.action == "readiness":
+                value = evidence_readiness(args.directory, args.task_id)
+                if args.format == "json":
+                    _emit(value, args)
+                else:
+                    print(f"{value['status'].upper()} evidence.readiness")
+                return PASS if value["status"] == "ready" else BLOCKED
             errors = evidence_verify(args.directory, args.task_id, args.branch)
             _print_errors(errors)
             return PASS if not errors else BLOCKED
@@ -699,6 +758,14 @@ def _main(argv: list[str] | None = None) -> int:
                         "evidence_ref": args.evidence_ref,
                         "blocker_class": args.blocker_class,
                         "source": args.source,
+                        "run_id": args.run_id,
+                        "phase": args.phase,
+                        "role": args.role,
+                        "head": args.head,
+                        "branch": args.branch,
+                        "evidence_root": args.evidence_root,
+                        "terminal": args.terminal,
+                        "supersedes": args.supersedes,
                     },
                 )
                 print(json.dumps({"event_file": str(path)}, ensure_ascii=True))
@@ -710,7 +777,13 @@ def _main(argv: list[str] | None = None) -> int:
                 files = import_opencode_session(args.root, args.session, args.task_id)
                 print(json.dumps({"imported": len(files)}, ensure_ascii=True))
                 return PASS
-            data = aggregate(args.root)
+            data = aggregate(
+                args.root,
+                task_id=getattr(args, "task_id", None),
+                run_id=getattr(args, "run_id", None),
+                terminal_only=getattr(args, "terminal_only", False),
+                include_derived=not getattr(args, "no_derived", False),
+            )
             if args.action == "export":
                 args.output.parent.mkdir(parents=True, exist_ok=True)
                 args.output.write_text(json.dumps(data, ensure_ascii=True, sort_keys=True), encoding="utf-8")

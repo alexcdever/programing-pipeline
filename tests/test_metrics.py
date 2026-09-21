@@ -33,6 +33,20 @@ class MetricsTests(unittest.TestCase):
             self.assertEqual(value['task_id'], 'unknown')
             self.assertIsNone(value['evidence_ref'])
 
+    def test_metric_event_preserves_run_and_terminal_dimensions(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = metric_event(Path(d), {
+                'event': 'gate_pre_merge', 'confidence': 'observed', 'task_id': 'task-a',
+                'result': 'pass', 'run_id': 'run-a', 'phase': 'main-final', 'role': 'main-final',
+                'head': 'abc123', 'branch': 'main', 'evidence_root': '.workflow/task-a',
+                'terminal': True, 'source': 'pipeline_tools',
+            })
+            value = json.loads(path.read_text(encoding='utf-8'))
+            self.assertEqual(value['run_id'], 'run-a')
+            self.assertEqual(value['phase'], 'main-final')
+            self.assertTrue(value['terminal'])
+            self.assertEqual(value['evidence_root'], '.workflow/task-a')
+
     def test_extended_sensitive_vocabulary_is_redacted_at_metric_boundary(self):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
@@ -115,6 +129,47 @@ class MetricsTests(unittest.TestCase):
             summary = aggregate(root)
             self.assertEqual(summary['automatic_events'], 1)
             self.assertEqual(summary['event_counts']['task_validate'], 1)
+
+    def test_aggregate_distinguishes_all_event_rates_from_known_result_rate(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            for event, result in (('task_validate', 'pass'), ('evidence_verify', 'blocked'), ('evidence_gap', 'blocked')):
+                metric_event(root, {
+                    'event': event, 'confidence': 'observed' if event != 'evidence_gap' else 'derived',
+                    'task_id': 'task-a', 'result': result, 'source': 'pipeline_tools',
+                })
+            summary = aggregate(root)
+            self.assertEqual(summary['passed'], 1)
+            self.assertEqual(summary['blocked'], 2)
+            self.assertEqual(summary['known_result_success_rate'], 1.0)
+            self.assertAlmostEqual(summary['all_event_pass_rate'], 1 / 3)
+            self.assertAlmostEqual(summary['blocked_rate'], 2 / 3)
+            self.assertEqual(summary['unresolved_blocked_count'], 1)
+            self.assertEqual(summary['terminal_state_unknown_count'], 3)
+
+    def test_aggregate_groups_events_by_task_and_reports_terminal_gate(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            metric_event(root, {
+                'event': 'evidence_verify', 'confidence': 'observed', 'task_id': 'task-a',
+                'result': 'blocked', 'source': 'pipeline_tools', 'run_id': 'run-a',
+                'phase': 'reviewer', 'terminal': False,
+            })
+            metric_event(root, {
+                'event': 'gate_pre_merge', 'confidence': 'observed', 'task_id': 'task-a',
+                'result': 'pass', 'source': 'pipeline_tools', 'run_id': 'run-a',
+                'phase': 'main-final', 'terminal': True,
+            })
+            metric_event(root, {
+                'event': 'task_validate', 'confidence': 'observed', 'task_id': 'task-b',
+                'result': 'pass', 'source': 'pipeline_tools', 'run_id': 'run-b',
+                'phase': 'executor', 'terminal': True,
+            })
+            summary = aggregate(root)
+            self.assertEqual(summary['task_counts']['task-a'], 2)
+            self.assertEqual(summary['terminal_task_count'], 2)
+            self.assertEqual(summary['terminal_gate_pass_count'], 1)
+            self.assertEqual(summary['terminal_unresolved_blocked_count'], 0)
 
     def test_import_opencode_session_records_structured_observations(self):
         with tempfile.TemporaryDirectory() as d:

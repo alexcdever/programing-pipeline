@@ -5,7 +5,7 @@
 
 ## 任务身份
 
-- 项目：programing-pipeline 与 programing-pipeline-tools
+- 项目：programing-pipeline（内置 `pipeline_tools`）
 - 领域或阶段：工作流机械化 / v1
 - 用户结果或系统能力：使用不依赖大模型判断的 Python 命令程序，校验任务契约、Git 身份、改动范围、任务证据和有界命令执行，并在项目 `.workflow/metrics/` 生成脱敏反馈统计。
 - 状态：已合并；自动指标采集由 `pipeline-tools-v1-continuation-1` 补充
@@ -16,7 +16,7 @@
 
 - `programing-pipeline` 当前基线提交 `88c75d3`；本任务会在工具 worktree 内同步接线改动，父技能接线证据以本任务最终提交为准。
 - Python 3.11 标准库；不依赖网络、第三方 Python 包或特定项目语言。
-- 新工具源码目录为 `D:/Projects/Skills/programing-pipeline-tools`，单独作为命令程序项目。
+- 工具源码已并入 `programing-pipeline/pipeline_tools`；不再维护独立 `programing-pipeline-tools` worktree。
 
 ### 允许修改
 

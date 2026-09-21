@@ -135,6 +135,24 @@
       "evidence_level": 1,
       "test_ref": "docs and code: automatic collection contract and tracked metrics policy",
       "command_ref": "python -m pipeline_tools task validate docs/tasks/pipeline-tools-v1-continuation-1.md"
+    },
+    {
+      "id": "AT6",
+      "evidence_level": 1,
+      "test_ref": "tests/test_metrics.py: aggregate rate, task/run and recovery dimensions",
+      "command_ref": "python -m unittest tests.test_metrics.MetricsTests.test_aggregate_distinguishes_all_event_rates_from_known_result_rate tests.test_metrics.MetricsTests.test_aggregate_groups_events_by_task_and_reports_terminal_gate"
+    },
+    {
+      "id": "AT7",
+      "evidence_level": 2,
+      "test_ref": "tests/test_cli.py: task-filtered terminal report and evidence readiness",
+      "command_ref": "python -m unittest tests.test_cli.CLITests.test_metrics_report_filters_by_task_and_terminal tests.test_cli.CLITests.test_evidence_readiness_reports_missing_final_check_without_gate_claim"
+    },
+    {
+      "id": "AT8",
+      "evidence_level": 1,
+      "test_ref": "tests/test_metrics.py and tests/test_cli.py: metric run/terminal identity dimensions",
+      "command_ref": "python -m unittest tests.test_metrics.MetricsTests.test_metric_event_preserves_run_and_terminal_dimensions tests.test_cli.CLITests.test_automatic_events_carry_task_and_evidence_identity"
     }
   ]
 }
@@ -151,7 +169,7 @@
 
 ### 前置条件
 
-- 父任务 `pipeline-tools-v1` 已实现基础指标事件、聚合和 CLI。
+- 父任务 `pipeline-tools-v1` 已实现基础指标事件、聚合和 CLI；工具现已并入本技能仓库。
 - 当前任务只改技能仓库，不修改 StoryLine 或其他消费项目。
 - Python 3.11 标准库；不联网、不上传数据、不新增第三方依赖。
 
@@ -214,7 +232,7 @@
 | AT2 | 已通过 | timeout feedback test | `.workflow/pipeline-tools-v1-continuation-1/full-test.raw.log` | stage + derived timeout |
 | AT2B–AT2F | 已通过 | attribution/retry/argparse/redaction tests | `.workflow/pipeline-tools-v1-continuation-1/full-test.raw.log` | path and failure boundaries |
 | AT3–AT3E | 已通过 | recursion/scope/identity tests | `.workflow/pipeline-tools-v1-continuation-1/full-test.raw.log` | forbidden override retained |
-| AT4 / AT4B / AT4C / AT4D | 已通过 | full unittest suite | `.workflow/pipeline-tools-v1-continuation-1/full-test.raw.log` | 56 tests OK |
+| AT4 / AT4B / AT4C / AT4D | 已通过 | full unittest suite | `.workflow/pipeline-tools-v1-continuation-1/full-test.raw.log` | 62 tests OK |
 | AT5 | 已通过 | task validate / scope / compile / diff check / pnpm10 preflight | `.workflow/pipeline-tools-v1-continuation-1/runtime-preflight-pnpm10.json` | continuation contract and current runtime valid |
 
 ### 最终结果
@@ -225,4 +243,4 @@
 - 主代理最终检查：未开始
 - 合并提交：不执行
 - 合并后复验：未开始
-- 遗留项：本任务产生的回溯/自动指标文件须在提交前逐项审查后再纳入 Git；历史 reviewer 报告中的 9.15.4 阻塞是旧版本策略证据，不代表 pnpm 10 不可用。
+- 遗留项：本任务产生的回溯/自动指标文件须在提交前逐项审查后再纳入 Git；指标模型已增加 task/run/terminal、真实通过率、恢复率与 evidence readiness，但旧 StoryLine 事件没有这些新维度时会保持 `null`/空过滤结果，不得回填猜测。

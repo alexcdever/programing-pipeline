@@ -17,7 +17,7 @@
 
 阶段事件名按命令族稳定生成，例如 `task_validate`、`command_run`、`scope_check`、
 `runtime_handshake`、`lifecycle_status`、`dispatch_write`、`result_verify`、`freshness`、
-`evidence_verify`、`gate_pre_merge` 和 `cli_parse_error`。聚合器保留未知阶段名的计数，
+`evidence_readiness`、`evidence_verify`、`gate_pre_merge` 和 `cli_parse_error`。聚合器保留未知阶段名的计数，
 避免增加新机械命令时丢失历史。
 
 使用 `PIPELINE_TOOLS_DISABLE_AUTO_METRICS=1` 仅用于工具测试或明确的诊断场景。关闭自动
@@ -53,7 +53,15 @@
   "attempt": 0,
   "evidence_ref": ".workflow/task-id/raw-command.log",
   "blocker_class": null,
-  "source": null
+  "source": null,
+  "run_id": null,
+  "phase": null,
+  "role": null,
+  "head": null,
+  "branch": null,
+  "evidence_root": null,
+  "terminal": null,
+  "supersedes": null
 }
 ```
 
@@ -63,6 +71,8 @@
 - `token_count` 只有运行时提供实际值才填写；字符数或估算值不能冒充实际 token。
 - `blocker_class` 可为 `product`、`environment`、`permission`、`evidence`、`dependency` 或 `workflow`；用于区分产品失败与执行环境/流程阻塞。
 - `source` 只保存短的结构化来源标识，例如 `opencode_session`，不得保存原始会话内容。
+- `run_id`、`phase`、`role`、`head`、`branch` 和 `supersedes` 用于关联一次流程尝试；`terminal=true` 只表示该事件被声明为该 run/task 的终态，不等于产品验收 PASS。
+- `evidence_root` 是项目内相对证据目录；`terminal` 未提供时保持 `null`，聚合器不得把未知终态当成最终成功或最终阻塞。
 
 ## 固定事件名
 
@@ -83,7 +93,15 @@
 | `recovery_path_miss` | 恢复阶段读取了不存在或错误路径 |
 | `scope_drift` | 机械范围检查发现越界或禁止路径 |
 
-`aggregate`、`report` 和 `export` 只从事件文件重建摘要，至少输出成功率、reported 排除数量、token 已知/未知数量、阻塞类型计数、用户流程纠正、主代理产品修改，以及上表的事件计数。聚合文件可以删除后重建。
+`aggregate`、`report` 和 `export` 只从事件文件重建摘要，至少输出：
+
+- `known_result_success_rate`：只在明确 pass/fail 的事件中计算；
+- `all_event_pass_rate`、`blocked_rate`：把 blocked 纳入分母；
+- `blocked_attempts`、按 task/run 的计数、`recovery_rate`；
+- `terminal_gate_pass_count`、`unresolved_blocked_count`；
+- reported 排除数量、token 已知/未知数量、阻塞类型计数、用户流程纠正、主代理产品修改和事件计数。
+
+支持按 `task_id`、`run_id`、`terminal_only`、`include_derived` 过滤。聚合文件可以删除后重建。
 
 ## 反馈边界
 

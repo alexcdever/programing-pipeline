@@ -1,7 +1,7 @@
 ---
 name: programing-pipeline
 description: "Use when an agent plans, builds, reviews, or merges code."
-version: 0.6.1
+version: 0.7.0
 author: Alex Chen (alexcdever)
 license: MIT
 platforms: [linux, macos, windows]
@@ -45,7 +45,7 @@ AI agent 修改、重构、修复、扩展或验证 Git 项目时使用，尤其
 
 ## 机械工具与项目级反馈
 
-机械检查和统计由独立的 `programing-pipeline-tools` 命令程序执行；技能只规定调用时机和判断边界。新任务单必须包含 `pipeline-contract` 机器区块，由 `pipeline-tools task validate` 校验；任务执行前运行 `task preflight`，执行中用 `command run` 统一超时和日志，范围用 `scope check`，合并前后用 `evidence verify` 与 `gate`。
+机械检查和统计由本技能内置的 `pipeline_tools` 命令程序执行；不要再依赖已废弃的独立 `programing-pipeline-tools` worktree。技能只规定调用时机和判断边界。新任务单必须包含 `pipeline-contract` 机器区块，由 `pipeline-tools task validate` 校验；任务执行前运行 `task preflight`，执行中用 `command run` 统一超时和日志，范围用 `scope check`，正式证据校验前运行 `evidence readiness`，合并前后用 `evidence verify` 与 `gate`。
 
 - 工具输出的退出码和原始日志是机械事实；终端摘要不替代日志。
 - 在派发 executor/reviewer 前先运行 runtime preflight，确认 Node/pnpm/Git、native ABI 和项目所需测试能力；环境不匹配不得伪装成产品失败或继续正式验收。
@@ -59,6 +59,7 @@ AI agent 修改、重构、修复、扩展或验证 Git 项目时使用，尤其
 - 报告必须包含机器可读的 `pipeline-evidence` 区块；自然语言报告不能单独产生验收结论。
 - 每个非 `metrics` 的 `pipeline-tools` 阶段命令默认自动写入一个 `observed` 结果事件到项目 `.workflow/metrics/`；超时、环境阻塞、证据缺口、范围漂移等只根据机械退出码和结构化结果追加 `derived` 反馈事件。该目录应纳入 Git 追踪，作为可审查的流程改进历史。`reported` 只能保留追溯，统计不参与验收，不自动改写技能或契约。
 - 自动采集不得从自然语言报告推断产品 PASS；不得记录 prompt、完整命令输出、凭据、token 或业务数据。仅在测试/明确诊断时使用 `PIPELINE_TOOLS_DISABLE_AUTO_METRICS=1` 关闭。
+- 正式 `evidence verify` 前先运行 `evidence readiness`；缺 final-check 或必要报告时记录“未准备好”，不要把阶段顺序问题误作产品验收失败。指标报告优先按 task/run/terminal 维度解释，不用全项目累计 `success_rate` 代替终态结论。
 - 正常只把短摘要放入上下文；完整输出、报告和统计事件留在项目文件中，需要诊断时再读取。
 
 ## 不可违反的规则

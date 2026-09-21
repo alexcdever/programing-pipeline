@@ -241,6 +241,48 @@ class CLITests(unittest.TestCase):
             self.assertEqual(len(values), 1)
             self.assertEqual(values[0]['event'], 'manual')
 
+    def test_metrics_report_filters_by_task_and_terminal(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            for event, result, task, terminal in (
+                ('evidence_verify', 'blocked', 'task-a', False),
+                ('gate_pre_merge', 'pass', 'task-a', True),
+                ('task_validate', 'pass', 'task-b', True),
+            ):
+                args = ['metrics', 'record', str(root), event, '--confidence', 'observed', '--task-id', task, '--result', result]
+                if terminal:
+                    args.extend(['--terminal'])
+                p = run_cli(args)
+                self.assertEqual(p.returncode, 0, (p.stdout, p.stderr))
+            p = run_cli(['metrics', 'report', str(root), '--task-id', 'task-a', '--terminal-only'])
+            self.assertEqual(p.returncode, 0, (p.stdout, p.stderr))
+            value = json.loads(p.stdout)
+            self.assertEqual(value['events'], 1)
+            self.assertEqual(value['terminal_gate_pass_count'], 1)
+
+    def test_evidence_readiness_reports_missing_final_check_without_gate_claim(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            evidence = root / '.workflow' / 'demo'
+            evidence.mkdir(parents=True)
+            p = run_cli(['--format', 'json', 'evidence', 'readiness', str(evidence), '--task-id', 'demo'])
+            self.assertEqual(p.returncode, 3, (p.stdout, p.stderr))
+            value = json.loads(p.stdout)
+            self.assertEqual(value['status'], 'not_ready')
+            self.assertIn('final-check.md', value['missing'])
+
+    def test_automatic_events_carry_task_and_evidence_identity(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            task = root / 'task.md'
+            task.write_text('''# Demo\n<!-- Task ID: demo -->\n```pipeline-contract\n{"schema":1,"task_id":"demo","allowed_paths":["src/**"],"forbidden_paths":[],"acceptance_tests":[{"id":"AT1","evidence_level":1,"test_ref":"tests/x.py","command_ref":"python -m unittest"}]}\n```\n''', encoding='utf-8')
+            p = run_cli(['task', 'validate', str(task)], env={'PIPELINE_TOOLS_DISABLE_AUTO_METRICS': '0'})
+            self.assertEqual(p.returncode, 0, (p.stdout, p.stderr))
+            value = json.loads(next((root / '.workflow' / 'metrics').glob('*.json')).read_text(encoding='utf-8'))
+            self.assertEqual(value['task_id'], 'demo')
+            self.assertEqual(value['evidence_root'], None)
+            self.assertFalse(value['terminal'])
+
     def test_runtime_preflight_and_role_scope(self):
         with tempfile.TemporaryDirectory() as d:
             root, _ = make_repo(d)

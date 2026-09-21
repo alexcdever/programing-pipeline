@@ -396,6 +396,29 @@ def _metrics_dir(root: Path) -> Path:
     return root / ".workflow" / "metrics"
 
 
+def _metric_bool(value: Any, default: bool = False) -> bool:
+    return value if isinstance(value, bool) else default
+
+
+def evidence_readiness(directory: Path, task_id: str) -> dict[str, Any]:
+    """Check whether the evidence set is ready for formal verification."""
+    required = ["executor-report.md", "review-report.md", "final-check.md"]
+    missing = [name for name in required if not (directory / name).is_file()]
+    result = "ready" if not missing else "not_ready"
+    return {
+        "schema": 1,
+        "command": "evidence.readiness",
+        "task_id": task_id,
+        "status": result,
+        "missing": missing,
+        "errors": [],
+        "blockers": [] if not missing else [{"class": "evidence", "reason": "missing evidence artifacts"}],
+        "observed": [{"fact": "required_evidence", "value": required}],
+        "next_actions": [] if not missing else ["complete_evidence_set"],
+        "unverified": [] if not missing else ["formal evidence verification"],
+    }
+
+
 def _safe_identifier(value: Any) -> str:
     text = str(value or "")
     if (
@@ -442,6 +465,9 @@ def metric_event(root: Path, event: dict[str, Any]) -> Path:
     evidence_ref = event.get("evidence_ref")
     if evidence_ref is not None and not _validate_evidence_ref(evidence_ref):
         raise ValueError("evidence_ref must be a project-relative path or null")
+    evidence_root = event.get("evidence_root")
+    if evidence_root is not None and not _validate_evidence_ref(evidence_root):
+        raise ValueError("evidence_root must be a project-relative path or null")
     blocker_class = event.get("blocker_class")
     if blocker_class not in BLOCKER_CLASSES:
         raise ValueError("invalid blocker_class")
@@ -460,8 +486,16 @@ def metric_event(root: Path, event: dict[str, Any]) -> Path:
         "reason": _safe_identifier(event["reason"]) if event.get("reason") else None,
         "attempt": event.get("attempt", 0),
         "evidence_ref": _relative_reference(evidence_ref),
+        "evidence_root": _relative_reference(evidence_root),
         "blocker_class": blocker_class,
         "source": _safe_identifier(event["source"]) if event.get("source") else None,
+        "run_id": _safe_identifier(event["run_id"]) if event.get("run_id") else None,
+        "phase": _safe_identifier(event["phase"]) if event.get("phase") else None,
+        "role": _safe_identifier(event["role"]) if event.get("role") else None,
+        "head": _safe_identifier(event["head"]) if event.get("head") else None,
+        "branch": _safe_identifier(event["branch"]) if event.get("branch") else None,
+        "terminal": event.get("terminal"),
+        "supersedes": _safe_identifier(event["supersedes"]) if event.get("supersedes") else None,
     }
     if clean["duration_s"] is not None and (
         isinstance(clean["duration_s"], bool)
@@ -471,6 +505,8 @@ def metric_event(root: Path, event: dict[str, Any]) -> Path:
         raise ValueError("duration_s must be non-negative or null")
     if not isinstance(clean["timed_out"], (bool, type(None))):
         raise ValueError("timed_out must be boolean or null")
+    if not isinstance(clean["terminal"], (bool, type(None))):
+        raise ValueError("terminal must be boolean or null")
     if isinstance(clean["attempt"], bool) or not isinstance(clean["attempt"], int) or clean["attempt"] < 0:
         raise ValueError("attempt must be a non-negative integer")
 
@@ -496,18 +532,35 @@ def _load_metric_events(root: Path) -> tuple[list[dict[str, Any]], list[str]]:
                 raise ValueError("invalid schema")
             if value.get("confidence") not in CONFIDENCES:
                 raise ValueError("invalid confidence")
+            value.setdefault("terminal", None)
+            value.setdefault("run_id", None)
+            value.setdefault("phase", None)
+            value.setdefault("role", None)
+            value.setdefault("head", None)
+            value.setdefault("branch", None)
+            value.setdefault("evidence_root", None)
             rows.append(value)
         except (OSError, json.JSONDecodeError, ValueError):
             invalid.append(path.name)
     return rows, invalid
 
 
-def aggregate(root: Path) -> dict[str, Any]:
+def aggregate(
+    root: Path,
+    *,
+    task_id: str | None = None,
+    run_id: str | None = None,
+    terminal_only: bool = False,
+    include_derived: bool = True,
+) -> dict[str, Any]:
     rows, invalid = _load_metric_events(root)
     if invalid:
         raise ValueError(f"invalid metric event files: {len(invalid)}")
-    core = [row for row in rows if row.get("confidence") in {"observed", "derived"}]
-    reported = [row for row in rows if row.get("confidence") == "reported"]
+    filtered = [row for row in rows if task_id is None or row.get("task_id") == task_id]
+    filtered = [row for row in filtered if run_id is None or row.get("run_id") == run_id]
+    filtered = [row for row in filtered if not terminal_only or _metric_bool(row.get("terminal"))]
+    core = [row for row in filtered if row.get("confidence") == "observed" or (include_derived and row.get("confidence") == "derived")]
+    reported = [row for row in filtered if row.get("confidence") == "reported"]
     passed = sum(row.get("result") in {"pass", "passed", 0} for row in core)
     failed = sum(row.get("result") in {"fail", "failed", 1} for row in core)
     known = passed + failed
@@ -531,9 +584,25 @@ def aggregate(root: Path) -> dict[str, Any]:
         event = row.get("event")
         if isinstance(event, str):
             all_event_counts[event] = all_event_counts.get(event, 0) + 1
+    task_ids = {row.get("task_id") for row in core if isinstance(row.get("task_id"), str)}
+    run_ids = {row.get("run_id") for row in core if isinstance(row.get("run_id"), str)}
+    blocked_tasks = {
+        row.get("task_id") for row in core
+        if row.get("result") == "blocked" and isinstance(row.get("task_id"), str)
+    }
+    recovered_tasks = {
+        task for task in blocked_tasks
+        if any(
+            later.get("task_id") == task
+            and later.get("result") == "pass"
+            and later.get("recorded_at", 0) > row.get("recorded_at", 0)
+            for row in core if row.get("task_id") == task
+            for later in core
+        )
+    }
     return {
         "schema": 1,
-        "events": len(rows),
+        "events": len(filtered),
         "core_events": len(core),
         "reported_events": len(reported),
         "passed": passed,
@@ -542,6 +611,9 @@ def aggregate(root: Path) -> dict[str, Any]:
         "flaky": sum(row.get("result") == "flaky" for row in core),
         "unknown_results": sum(row.get("result") == "unknown" for row in core),
         "success_rate": passed / known if known else None,
+        "known_result_success_rate": passed / known if known else None,
+        "all_event_pass_rate": passed / len(core) if core else None,
+        "blocked_rate": sum(row.get("result") == "blocked" for row in core) / len(core) if core else None,
         "token_count_total": sum(token_values) if token_values else None,
         "token_count_unknown": sum(row.get("token_count") is None for row in core),
         "review_overturns": event_counts["review_overturn"],
@@ -556,6 +628,24 @@ def aggregate(root: Path) -> dict[str, Any]:
         "recovery_path_misses": sum(row.get("event") == "recovery_path_miss" for row in core),
         "automatic_events": sum(row.get("source") == "pipeline_tools" for row in core),
         "event_counts": dict(sorted(all_event_counts.items())),
+        "task_counts": dict(sorted({
+            str(key): sum(row.get("task_id") == key for row in core)
+            for key in task_ids
+        }.items())),
+        "run_counts": dict(sorted({
+            str(key): sum(row.get("run_id") == key for row in core)
+            for key in run_ids
+        }.items())),
+        "terminal_task_count": len({row.get("task_id") for row in core if _metric_bool(row.get("terminal")) and row.get("task_id")} ),
+        "terminal_gate_pass_count": sum(row.get("event") == "gate_pre_merge" and row.get("result") == "pass" for row in core if _metric_bool(row.get("terminal"))),
+        "terminal_unresolved_blocked_count": sum(row.get("result") == "blocked" for row in core if _metric_bool(row.get("terminal"))),
+        "blocked_attempts": sum(row.get("result") == "blocked" for row in core),
+        "blocked_task_count": len(blocked_tasks),
+        "recovered_blocked_task_count": len(recovered_tasks),
+        "recovery_rate": len(recovered_tasks) / len(blocked_tasks) if blocked_tasks else None,
+        "unresolved_blocked_count": len(blocked_tasks - recovered_tasks),
+        "terminal_state_unknown_count": sum(row.get("terminal") is None for row in core),
+        "filters": {"task_id": task_id, "run_id": run_id, "terminal_only": terminal_only, "include_derived": include_derived},
     }
 
 
