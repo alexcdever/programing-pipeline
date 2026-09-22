@@ -1,6 +1,8 @@
 import json, os, subprocess, sys, tempfile, unittest
 from pathlib import Path
 
+from pipeline_tools.layout import metrics_dirs
+
 ROOT = Path(__file__).resolve().parent.parent
 PY = sys.executable
 
@@ -115,7 +117,7 @@ class CLITests(unittest.TestCase):
             self.assertIn('"core_events": 1', p.stdout.replace("'", '"'))
             p = run_cli(['metrics', 'purge', str(root)])
             self.assertEqual(p.returncode, 0, (p.stdout, p.stderr))
-            self.assertEqual(list((root / '.workflow' / 'metrics').glob('*.json')), [])
+            self.assertEqual(list(metrics_dirs(root)[-1].glob('*.json')), [])
 
     def test_workflow_command_automatically_records_tracked_metric(self):
         with tempfile.TemporaryDirectory() as d:
@@ -124,7 +126,7 @@ class CLITests(unittest.TestCase):
             task.write_text('''# Demo\n<!-- Task ID: demo -->\n```pipeline-contract\n{"schema":1,"task_id":"demo","allowed_paths":["src/**"],"forbidden_paths":[],"acceptance_tests":[{"id":"AT1","evidence_level":1,"test_ref":"tests/x.py","command_ref":"python -m unittest"}]}\n```\n''', encoding='utf-8')
             p = run_cli(['task', 'validate', str(task)], env={'PIPELINE_TOOLS_DISABLE_AUTO_METRICS': '0'})
             self.assertEqual(p.returncode, 0, (p.stdout, p.stderr))
-            files = list((root / '.workflow' / 'metrics').glob('*.json'))
+            files = list(metrics_dirs(root)[-1].glob('*.json'))
             self.assertEqual(len(files), 1)
             value = json.loads(files[0].read_text(encoding='utf-8'))
             self.assertEqual(value['event'], 'task_validate')
@@ -134,7 +136,7 @@ class CLITests(unittest.TestCase):
             self.assertEqual(value['source'], 'pipeline_tools')
             self.assertEqual(value['evidence_ref'], 'task.md')
             self.assertIsInstance(value['duration_s'], float)
-            ignored = subprocess.run(['git', '-C', str(ROOT), 'check-ignore', '--no-index', '.workflow/metrics/event.json'], capture_output=True, text=True, timeout=60)
+            ignored = subprocess.run(['git', '-C', str(ROOT), 'check-ignore', '--no-index', '.pipeline/metrics/event.json'], capture_output=True, text=True, timeout=60)
             self.assertNotEqual(ignored.returncode, 0)
 
     def test_automatic_timeout_records_feedback_event(self):
@@ -143,7 +145,7 @@ class CLITests(unittest.TestCase):
             log = root / 'timeout.log'
             p = run_cli(['command', 'run', '--cwd', str(root), '--log', str(log), '--timeout', '1', '--task-id', 'demo', '--', PY, '-c', 'import time; time.sleep(5)'], env={'PIPELINE_TOOLS_DISABLE_AUTO_METRICS': '0'})
             self.assertEqual(p.returncode, 3, (p.stdout, p.stderr))
-            values = [json.loads(path.read_text(encoding='utf-8')) for path in (root / '.workflow' / 'metrics').glob('*.json')]
+            values = [json.loads(path.read_text(encoding='utf-8')) for path in metrics_dirs(root)[-1].glob('*.json')]
             self.assertEqual({value['event'] for value in values}, {'command_run', 'timeout'})
             command = next(value for value in values if value['event'] == 'command_run')
             self.assertTrue(command['timed_out'])
@@ -155,20 +157,20 @@ class CLITests(unittest.TestCase):
     def test_automatic_command_uses_task_id_from_workflow_log_path(self):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
-            log = root / '.workflow' / 'demo' / 'test.log'
+            log = root / '.pipeline' / 'demo' / 'test.log'
             p = run_cli(['command', 'run', '--cwd', str(root), '--log', str(log), '--timeout', '5', '--', PY, '-c', 'print("ok")'], env={'PIPELINE_TOOLS_DISABLE_AUTO_METRICS': '0'})
             self.assertEqual(p.returncode, 0, (p.stdout, p.stderr))
-            values = [json.loads(path.read_text(encoding='utf-8')) for path in (root / '.workflow' / 'metrics').glob('*.json')]
+            values = [json.loads(path.read_text(encoding='utf-8')) for path in metrics_dirs(root)[-1].glob('*.json')]
             self.assertEqual(len(values), 1)
             self.assertEqual(values[0]['task_id'], 'demo')
-            self.assertEqual(values[0]['evidence_ref'], '.workflow/demo/test.log')
+            self.assertEqual(values[0]['evidence_ref'], '.pipeline/demo/test.log')
 
     def test_automatic_retry_records_first_retry_attempt(self):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
             p = run_cli(['command', 'run', '--cwd', str(root), '--log', 'retry.log', '--timeout', '5', '--attempt', '1', '--', PY, '-c', 'print("ok")'], env={'PIPELINE_TOOLS_DISABLE_AUTO_METRICS': '0'})
             self.assertEqual(p.returncode, 0, (p.stdout, p.stderr))
-            values = [json.loads(path.read_text(encoding='utf-8')) for path in (root / '.workflow' / 'metrics').glob('*.json')]
+            values = [json.loads(path.read_text(encoding='utf-8')) for path in metrics_dirs(root)[-1].glob('*.json')]
             self.assertEqual({value['event'] for value in values}, {'command_run', 'retry'})
             retry = next(value for value in values if value['event'] == 'retry')
             self.assertEqual(retry['attempt'], 1)
@@ -179,7 +181,7 @@ class CLITests(unittest.TestCase):
             root = Path(d)
             p = run_cli(['command', 'run', '--cwd', str(root)], env={'PIPELINE_TOOLS_DISABLE_AUTO_METRICS': '0'})
             self.assertEqual(p.returncode, 2, (p.stdout, p.stderr))
-            values = [json.loads(path.read_text(encoding='utf-8')) for path in (root / '.workflow' / 'metrics').glob('*.json')]
+            values = [json.loads(path.read_text(encoding='utf-8')) for path in metrics_dirs(root)[-1].glob('*.json')]
             self.assertEqual(len(values), 1)
             self.assertEqual(values[0]['event'], 'command_run')
             self.assertEqual(values[0]['result'], 'fail')
@@ -189,7 +191,7 @@ class CLITests(unittest.TestCase):
             root = Path(d)
             p = run_cli(['not-a-command'], cwd=root, env={'PIPELINE_TOOLS_DISABLE_AUTO_METRICS': '0', 'PYTHONPATH': str(ROOT)})
             self.assertEqual(p.returncode, 2, (p.stdout, p.stderr))
-            values = [json.loads(path.read_text(encoding='utf-8')) for path in (root / '.workflow' / 'metrics').glob('*.json')]
+            values = [json.loads(path.read_text(encoding='utf-8')) for path in metrics_dirs(root)[-1].glob('*.json')]
             self.assertEqual(len(values), 1)
             self.assertEqual(values[0]['event'], 'cli_parse_error')
 
@@ -198,17 +200,17 @@ class CLITests(unittest.TestCase):
             root = Path(d)
             p = run_cli(['task', 'validate', '--help'], cwd=root, env={'PIPELINE_TOOLS_DISABLE_AUTO_METRICS': '0', 'PYTHONPATH': str(ROOT)})
             self.assertEqual(p.returncode, 0, (p.stdout, p.stderr))
-            values = [json.loads(path.read_text(encoding='utf-8')) for path in (root / '.workflow' / 'metrics').glob('*.json')]
+            values = [json.loads(path.read_text(encoding='utf-8')) for path in metrics_dirs(root)[-1].glob('*.json')]
             self.assertEqual(len(values), 1)
             self.assertEqual(values[0]['event'], 'cli_help')
 
     def test_automatic_metrics_redact_sensitive_path_components(self):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
-            log = root / '.workflow' / 'demo' / 'secret' / 'test.log'
+            log = root / '.pipeline' / 'demo' / 'secret' / 'test.log'
             p = run_cli(['command', 'run', '--cwd', str(root), '--log', str(log), '--timeout', '5', '--task-id', 'demo', '--', PY, '-c', 'print("ok")'], env={'PIPELINE_TOOLS_DISABLE_AUTO_METRICS': '0'})
             self.assertEqual(p.returncode, 0, (p.stdout, p.stderr))
-            values = [json.loads(path.read_text(encoding='utf-8')) for path in (root / '.workflow' / 'metrics').glob('*.json')]
+            values = [json.loads(path.read_text(encoding='utf-8')) for path in metrics_dirs(root)[-1].glob('*.json')]
             self.assertEqual(len(values), 1)
             self.assertIsNone(values[0]['evidence_ref'])
             self.assertNotIn('secret', values[0]['task_id'].lower())
@@ -216,19 +218,19 @@ class CLITests(unittest.TestCase):
     def test_automatic_runtime_and_lifecycle_events_keep_identity(self):
         with tempfile.TemporaryDirectory() as d:
             root, _ = make_repo(d)
-            workflow = root / '.workflow' / 'demo'
+            workflow = root / '.pipeline' / 'demo'
             p = run_cli(['runtime', 'handshake', str(root), str(workflow), '--role', 'reviewer', '--node', '0.0.0'], env={'PIPELINE_TOOLS_DISABLE_AUTO_METRICS': '0'})
             self.assertEqual(p.returncode, 3, (p.stdout, p.stderr))
-            values = [json.loads(path.read_text(encoding='utf-8')) for path in (root / '.workflow' / 'metrics').glob('*.json')]
+            values = [json.loads(path.read_text(encoding='utf-8')) for path in metrics_dirs(root)[-1].glob('*.json')]
             handshake = next(value for value in values if value['event'] == 'runtime_handshake')
             self.assertEqual(handshake['task_id'], 'demo')
-            self.assertEqual(handshake['evidence_ref'], '.workflow/demo/capability-handshake.json')
+            self.assertEqual(handshake['evidence_ref'], '.pipeline/demo/capability-handshake.json')
             p = run_cli(['lifecycle', 'status', str(root), '--task-id', 'demo', '--evidence', str(workflow)], env={'PIPELINE_TOOLS_DISABLE_AUTO_METRICS': '0'})
             self.assertEqual(p.returncode, 0, (p.stdout, p.stderr))
-            values = [json.loads(path.read_text(encoding='utf-8')) for path in (root / '.workflow' / 'metrics').glob('*.json')]
+            values = [json.loads(path.read_text(encoding='utf-8')) for path in metrics_dirs(root)[-1].glob('*.json')]
             lifecycle = next(value for value in values if value['event'] == 'lifecycle_status')
             self.assertEqual(lifecycle['task_id'], 'demo')
-            self.assertEqual(lifecycle['evidence_ref'], '.workflow/demo')
+            self.assertEqual(lifecycle['evidence_ref'], '.pipeline/demo')
 
     def test_metrics_commands_do_not_recursively_record_stage_metrics(self):
         with tempfile.TemporaryDirectory() as d:
@@ -237,7 +239,7 @@ class CLITests(unittest.TestCase):
             self.assertEqual(p.returncode, 0, (p.stdout, p.stderr))
             p = run_cli(['metrics', 'report', str(root)], env={'PIPELINE_TOOLS_DISABLE_AUTO_METRICS': '0'})
             self.assertEqual(p.returncode, 0, (p.stdout, p.stderr))
-            values = [json.loads(path.read_text(encoding='utf-8')) for path in (root / '.workflow' / 'metrics').glob('*.json')]
+            values = [json.loads(path.read_text(encoding='utf-8')) for path in metrics_dirs(root)[-1].glob('*.json')]
             self.assertEqual(len(values), 1)
             self.assertEqual(values[0]['event'], 'manual')
 
@@ -263,7 +265,7 @@ class CLITests(unittest.TestCase):
     def test_evidence_readiness_reports_missing_final_check_without_gate_claim(self):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
-            evidence = root / '.workflow' / 'demo'
+            evidence = root / '.pipeline' / 'demo'
             evidence.mkdir(parents=True)
             p = run_cli(['--format', 'json', 'evidence', 'readiness', str(evidence), '--task-id', 'demo'])
             self.assertEqual(p.returncode, 3, (p.stdout, p.stderr))
@@ -274,14 +276,14 @@ class CLITests(unittest.TestCase):
     def test_evidence_readiness_records_not_ready_feedback(self):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
-            evidence = root / '.workflow' / 'demo'
+            evidence = root / '.pipeline' / 'demo'
             evidence.mkdir(parents=True)
             p = run_cli(
                 ['--format', 'json', 'evidence', 'readiness', str(evidence), '--task-id', 'demo'],
                 env={'PIPELINE_TOOLS_DISABLE_AUTO_METRICS': '0'},
             )
             self.assertEqual(p.returncode, 3, (p.stdout, p.stderr))
-            values = [json.loads(path.read_text(encoding='utf-8')) for path in (root / '.workflow' / 'metrics').glob('*.json')]
+            values = [json.loads(path.read_text(encoding='utf-8')) for path in metrics_dirs(root)[-1].glob('*.json')]
             self.assertEqual({value['event'] for value in values}, {'evidence_readiness', 'evidence_not_ready'})
             derived = next(value for value in values if value['event'] == 'evidence_not_ready')
             self.assertEqual(derived['confidence'], 'derived')
@@ -294,7 +296,7 @@ class CLITests(unittest.TestCase):
             task.write_text('''# Demo\n<!-- Task ID: demo -->\n```pipeline-contract\n{"schema":1,"task_id":"demo","allowed_paths":["src/**"],"forbidden_paths":[],"acceptance_tests":[{"id":"AT1","evidence_level":1,"test_ref":"tests/x.py","command_ref":"python -m unittest"}]}\n```\n''', encoding='utf-8')
             p = run_cli(['task', 'validate', str(task)], env={'PIPELINE_TOOLS_DISABLE_AUTO_METRICS': '0'})
             self.assertEqual(p.returncode, 0, (p.stdout, p.stderr))
-            value = json.loads(next((root / '.workflow' / 'metrics').glob('*.json')).read_text(encoding='utf-8'))
+            value = json.loads(next(metrics_dirs(root)[-1].glob('*.json')).read_text(encoding='utf-8'))
             self.assertEqual(value['task_id'], 'demo')
             self.assertEqual(value['evidence_root'], None)
             self.assertFalse(value['terminal'])
@@ -336,7 +338,7 @@ class CLITests(unittest.TestCase):
     def test_runtime_handshake_writes_machine_evidence(self):
         with tempfile.TemporaryDirectory() as d:
             root, _ = make_repo(d)
-            workflow = root / '.workflow' / 'demo'
+            workflow = root / '.pipeline' / 'demo'
             p = run_cli(['runtime', 'handshake', str(root), str(workflow), '--role', 'reviewer'])
             self.assertEqual(p.returncode, 3, (p.stdout, p.stderr))
             self.assertTrue((workflow / 'capability-handshake.json').is_file())
@@ -374,7 +376,7 @@ class CLITests(unittest.TestCase):
     def test_lifecycle_status_is_structured_and_starts_with_executor(self):
         with tempfile.TemporaryDirectory() as d:
             root, _ = make_repo(d)
-            evidence = root / '.workflow' / 'demo'
+            evidence = root / '.pipeline' / 'demo'
             p = run_cli(['--format', 'json', 'lifecycle', 'status', str(root), '--task-id', 'demo', '--evidence', str(evidence)])
             self.assertEqual(p.returncode, 0, (p.stdout, p.stderr))
             value = json.loads(p.stdout)
@@ -389,24 +391,24 @@ class CLITests(unittest.TestCase):
             dispatch.write_text(json.dumps({
                 'schema': 1, 'task_id': 'demo', 'role': 'reviewer', 'round': 1,
                 'root': '.', 'worktree': '.', 'branch': 'main',
-                'evidence_dir': '.workflow/demo',
+                'evidence_dir': '.pipeline/demo',
                 'permissions': {'write_workflow': True, 'write_product': False},
-                'output': {'result': '.workflow/demo/reviewer-result.json'},
+                'output': {'result': '.pipeline/demo/reviewer-result.json'},
             }), encoding='utf-8')
-            out = root / '.workflow' / 'demo' / 'dispatch.json'
+            out = root / '.pipeline' / 'demo' / 'dispatch.json'
             p = run_cli(['dispatch', 'write', str(dispatch), str(out)])
             self.assertEqual(p.returncode, 0, (p.stdout, p.stderr))
-            evidence = root / '.workflow' / 'demo' / 'evidence.log'
+            evidence = root / '.pipeline' / 'demo' / 'evidence.log'
             evidence.write_text('observed', encoding='utf-8')
-            result = root / '.workflow' / 'demo' / 'reviewer-result.json'
+            result = root / '.pipeline' / 'demo' / 'reviewer-result.json'
             result.write_text(json.dumps({
                 'schema': 1, 'task_id': 'demo', 'role': 'reviewer', 'status': 'pass',
-                'identity': {'head': head}, 'acceptance': [{'id': 'AT1', 'status': 'pass', 'exit_code': 0, 'evidence_refs': ['.workflow/demo/evidence.log']}],
+                'identity': {'head': head}, 'acceptance': [{'id': 'AT1', 'status': 'pass', 'exit_code': 0, 'evidence_refs': ['.pipeline/demo/evidence.log']}],
                 'unverified': [],
             }), encoding='utf-8')
             p = run_cli(['result', 'verify', str(result), '--task-id', 'demo', '--role', 'reviewer'])
             self.assertEqual(p.returncode, 0, (p.stdout, p.stderr))
-            p = run_cli(['--format', 'json', 'freshness', str(root), str(root / '.workflow' / 'demo'), '--result', str(result)])
+            p = run_cli(['--format', 'json', 'freshness', str(root), str(root / '.pipeline' / 'demo'), '--result', str(result)])
             self.assertEqual(p.returncode, 0, (p.stdout, p.stderr))
             self.assertEqual(json.loads(p.stdout)['status'], 'pass')
 

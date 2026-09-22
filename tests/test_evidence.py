@@ -19,11 +19,11 @@ def report(role, task_id='demo', branch='feature/demo', status='PASS'):
             {
                 'command': 'python -m unittest',
                 'exit_code': 0,
-                'evidence_ref': '.workflow/demo/test.log',
+                'evidence_ref': '.pipeline/demo/test.log',
             }
         ],
         'assertions': ['the observed result matches the contract'],
-        'evidence_refs': ['.workflow/demo/test.log'],
+        'evidence_refs': ['.pipeline/demo/test.log'],
         'unverified': [],
     }
     return '```pipeline-evidence\n' + json.dumps(evidence) + '\n```\n'
@@ -31,7 +31,7 @@ def report(role, task_id='demo', branch='feature/demo', status='PASS'):
 
 class EvidenceTests(unittest.TestCase):
     def _make_evidence_dir(self, root, statuses=None):
-        directory = root / '.workflow' / 'demo'
+        directory = root / '.pipeline' / 'demo'
         directory.mkdir(parents=True)
         artifact = directory / 'test.log'
         artifact.write_text('observed test output', encoding='utf-8')
@@ -62,7 +62,7 @@ class EvidenceTests(unittest.TestCase):
     def test_missing_evidence_artifact_is_rejected(self):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
-            directory = root / '.workflow' / 'demo'
+            directory = root / '.pipeline' / 'demo'
             directory.mkdir(parents=True)
             for name, role in {
                 'executor-report.md': 'executor',
@@ -77,13 +77,13 @@ class EvidenceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
             directory = self._make_evidence_dir(root)
-            absolute = str(root / '.workflow' / 'demo' / 'test.log').replace('\\', '/')
+            absolute = str(root / '.pipeline' / 'demo' / 'test.log').replace('\\', '/')
             for name, role in {
                 'executor-report.md': 'executor',
                 'review-report.md': 'reviewer',
                 'final-check.md': 'main-final',
             }.items():
-                text = report(role).replace('.workflow/demo/test.log', absolute)
+                text = report(role).replace('.pipeline/demo/test.log', absolute)
                 (directory / name).write_text(text, encoding='utf-8')
             errors = evidence_verify(directory, 'demo', 'feature/demo')
             self.assertTrue(any('relative' in error for error in errors))

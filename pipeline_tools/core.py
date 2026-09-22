@@ -14,6 +14,8 @@ import hashlib
 from pathlib import Path
 from typing import Any
 
+from .layout import active_pipeline_dir, evidence_root, is_metrics_path, metrics_dirs
+
 PASS, FAIL, CONFIG, BLOCKED, DRIFT = 0, 1, 2, 3, 4
 REPORT_NAMES = ("executor-report.md", "review-report.md", "final-check.md")
 CONFIDENCES = {"observed", "derived", "reported"}
@@ -225,10 +227,7 @@ def scope_check(root: Path, allowed: list[str], forbidden: list[str]) -> list[st
         normalized = _normalize_path(path)
         forbidden_match = any(_matches(path, pattern, root) for pattern in forbidden)
         allowed_match = any(_matches(path, pattern, root) for pattern in allowed)
-        if (
-            (normalized == ".workflow/metrics" or normalized.startswith(".workflow/metrics/"))
-            and not forbidden_match
-        ):
+        if is_metrics_path(normalized) and not forbidden_match:
             continue
         if forbidden_match or not allowed_match:
             bad.append(path)
@@ -248,10 +247,7 @@ def _validate_evidence_ref(value: Any) -> bool:
 
 
 def _evidence_root(directory: Path) -> Path:
-    # Standard layout: <project>/.workflow/<task-id>/.
-    if directory.parent.name == ".workflow":
-        return directory.parent.parent
-    return directory
+    return evidence_root(directory)
 
 
 def _evidence_file_exists(directory: Path, reference: Any) -> bool:
@@ -393,7 +389,7 @@ def evidence_verify(directory: Path, task_id: str, branch: str | None = None) ->
 
 
 def _metrics_dir(root: Path) -> Path:
-    return root / ".workflow" / "metrics"
+    return active_pipeline_dir(root) / "metrics"
 
 
 def _metric_bool(value: Any, default: bool = False) -> bool:
@@ -522,26 +518,32 @@ def metric_event(root: Path, event: dict[str, Any]) -> Path:
 def _load_metric_events(root: Path) -> tuple[list[dict[str, Any]], list[str]]:
     rows: list[dict[str, Any]] = []
     invalid: list[str] = []
-    directory = _metrics_dir(root)
-    if not directory.is_dir():
-        return rows, invalid
-    for path in sorted(directory.glob("*.json")):
-        try:
-            value = json.loads(path.read_text(encoding="utf-8"))
-            if not isinstance(value, dict) or value.get("schema") != 1:
-                raise ValueError("invalid schema")
-            if value.get("confidence") not in CONFIDENCES:
-                raise ValueError("invalid confidence")
-            value.setdefault("terminal", None)
-            value.setdefault("run_id", None)
-            value.setdefault("phase", None)
-            value.setdefault("role", None)
-            value.setdefault("head", None)
-            value.setdefault("branch", None)
-            value.setdefault("evidence_root", None)
-            rows.append(value)
-        except (OSError, json.JSONDecodeError, ValueError):
-            invalid.append(path.name)
+    seen_event_ids: set[str] = set()
+    for directory in metrics_dirs(root):
+        if not directory.is_dir():
+            continue
+        for path in sorted(directory.glob("*.json")):
+            try:
+                value = json.loads(path.read_text(encoding="utf-8"))
+                if not isinstance(value, dict) or value.get("schema") != 1:
+                    raise ValueError("invalid schema")
+                if value.get("confidence") not in CONFIDENCES:
+                    raise ValueError("invalid confidence")
+                event_id = value.get("event_id")
+                if isinstance(event_id, str) and event_id in seen_event_ids:
+                    continue
+                if isinstance(event_id, str):
+                    seen_event_ids.add(event_id)
+                value.setdefault("terminal", None)
+                value.setdefault("run_id", None)
+                value.setdefault("phase", None)
+                value.setdefault("role", None)
+                value.setdefault("head", None)
+                value.setdefault("branch", None)
+                value.setdefault("evidence_root", None)
+                rows.append(value)
+            except (OSError, json.JSONDecodeError, ValueError):
+                invalid.append(path.name)
     return rows, invalid
 
 
@@ -977,14 +979,14 @@ def import_opencode_session(root: Path, session_file: Path, task_id: str = "open
 
 
 def purge_metrics(root: Path) -> int:
-    directory = _metrics_dir(root)
-    if not directory.is_dir():
-        return 0
     count = 0
-    for pattern in ("*.json", "*.tmp"):
-        for path in directory.glob(pattern):
-            path.unlink()
-            count += 1
+    for directory in metrics_dirs(root):
+        if not directory.is_dir():
+            continue
+        for pattern in ("*.json", "*.tmp"):
+            for path in directory.glob(pattern):
+                path.unlink()
+                count += 1
     return count
 
 

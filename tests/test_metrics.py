@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from pipeline_tools.core import aggregate, import_opencode_session, metric_event
+from pipeline_tools.layout import metrics_dirs
 
 
 class MetricsTests(unittest.TestCase):
@@ -18,7 +19,7 @@ class MetricsTests(unittest.TestCase):
             })
             self.assertEqual(aggregate(root)['events'], 2)
             self.assertEqual(aggregate(root)['core_events'], 1)
-            raw = ' '.join(p.read_text() for p in (root / '.workflow/metrics').glob('*.json'))
+            raw = ' '.join(p.read_text() for p in metrics_dirs(root)[0].glob('*.json'))
             self.assertNotIn(str(root), raw)
             self.assertIn('null', raw)
 
@@ -38,14 +39,14 @@ class MetricsTests(unittest.TestCase):
             path = metric_event(Path(d), {
                 'event': 'gate_pre_merge', 'confidence': 'observed', 'task_id': 'task-a',
                 'result': 'pass', 'run_id': 'run-a', 'phase': 'main-final', 'role': 'main-final',
-                'head': 'abc123', 'branch': 'main', 'evidence_root': '.workflow/task-a',
+                'head': 'abc123', 'branch': 'main', 'evidence_root': '.pipeline/task-a',
                 'terminal': True, 'source': 'pipeline_tools',
             })
             value = json.loads(path.read_text(encoding='utf-8'))
             self.assertEqual(value['run_id'], 'run-a')
             self.assertEqual(value['phase'], 'main-final')
             self.assertTrue(value['terminal'])
-            self.assertEqual(value['evidence_root'], '.workflow/task-a')
+            self.assertEqual(value['evidence_root'], '.pipeline/task-a')
 
     def test_extended_sensitive_vocabulary_is_redacted_at_metric_boundary(self):
         with tempfile.TemporaryDirectory() as d:

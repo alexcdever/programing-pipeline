@@ -10,11 +10,11 @@
     {
       "command": "<complete command>",
       "exit_code": 0,
-      "evidence_ref": ".workflow/<task-id>/<raw-output>.log"
+      "evidence_ref": ".pipeline/<task-id>/<raw-output>.log"
     }
   ],
   "assertions": ["<observed assertion>"],
-  "evidence_refs": [".workflow/<task-id>/<raw-output>.log"],
+  "evidence_refs": [".pipeline/<task-id>/<raw-output>.log"],
   "unverified": [],
   "identity": {
     "head": "<commit-sha>"

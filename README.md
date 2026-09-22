@@ -12,8 +12,8 @@
 默认项目约定：
 
 - 任务单：`docs/tasks/<task-id>.md`
-- 任务证据：`.workflow/<task-id>/`
-- 项目级统计：`.workflow/metrics/`（由工具自动生成并纳入 Git 追踪）
+- 任务证据：`.pipeline/<task-id>/`
+- 项目级统计：`.pipeline/metrics/`（由工具自动生成并纳入 Git 追踪）
 - 执行 worktree：`.worktrees/<task-id>`（主代理从主工作树创建唯一目录）
 - 任务契约提交后冻结
 - 合并前需要执行、独立审查和主代理终检；合并后在主工作树复验
@@ -35,10 +35,10 @@ python -m pipeline_tools --help
 python -m pipeline_tools task validate docs/tasks/<task-id>.md
 python -m pipeline_tools task preflight . --contract <frozen-commit> --task-sheet docs/tasks/<task-id>.md
 python -m pipeline_tools scope check . --allowed 'src/**' --forbidden '**/.env'
-python -m pipeline_tools command run --cwd . --log .workflow/<task-id>/test.log --timeout 180 -- python -m unittest
-python -m pipeline_tools evidence verify .workflow/<task-id> --task-id <task-id> --branch <branch>
-python -m pipeline_tools gate pre-merge .workflow/<task-id> --task-id <task-id> --branch <branch>
-python -m pipeline_tools gate post-merge .workflow/<task-id> --task-id <task-id> --branch <branch>
+python -m pipeline_tools command run --cwd . --log .pipeline/<task-id>/test.log --timeout 180 -- python -m unittest
+python -m pipeline_tools evidence verify .pipeline/<task-id> --task-id <task-id> --branch <branch>
+python -m pipeline_tools gate pre-merge .pipeline/<task-id> --task-id <task-id> --branch <branch>
+python -m pipeline_tools gate post-merge .pipeline/<task-id> --task-id <task-id> --branch <branch>
 ```
 
 退出码：`0` 通过、`1` 被执行命令失败、`2` 参数/配置错误、`3` 证据不足或环境阻塞、`4` 身份/契约/范围漂移。
@@ -48,7 +48,7 @@ python -m pipeline_tools gate post-merge .workflow/<task-id> --task-id <task-id>
 ## 项目级反馈
 
 除 `metrics` 子命令外，所有 `pipeline-tools` 阶段命令默认自动记录一个结构化指标事件到
-目标项目的 `.workflow/metrics/`。指标文件是可审查的工作流历史，应纳入 Git；不要把该目录
+目标项目的 `.pipeline/metrics/`。指标文件是可审查的流水线历史，应纳入 Git；不要把该目录
 加入项目的 `.gitignore`。自动采集只使用命令退出码、结构化结果和可定位的证据路径，不会从
 自然语言报告推断产品结论，也不会记录 token、凭据、完整命令输出或业务数据。
 
@@ -60,21 +60,21 @@ python -m pipeline_tools gate post-merge .workflow/<task-id> --task-id <task-id>
 python -m pipeline_tools metrics record . retry --confidence observed --task-id <task-id> --result unknown --attempt 1
 python -m pipeline_tools metrics report .
 python -m pipeline_tools metrics report . --task-id <task-id> --terminal-only
-python -m pipeline_tools metrics export . .workflow/metrics-summary.json
+python -m pipeline_tools metrics export . .pipeline/metrics-summary.json
 python -m pipeline_tools metrics purge .
 python -m pipeline_tools metrics import-opencode-session . <session-export.json> --task-id <task-id>
 python -m pipeline_tools runtime preflight . --node 22.23.2 --pnpm 10.27.0
-python -m pipeline_tools runtime handshake . .workflow/<task-id> --role reviewer --node 22.23.2 --pnpm 10.27.0
+python -m pipeline_tools runtime handshake . .pipeline/<task-id> --role reviewer --node 22.23.2 --pnpm 10.27.0
 python -m pipeline_tools runtime role-scope . --role main-agent --product-pattern 'packages/**'
-python -m pipeline_tools --format json --output .workflow/<task-id>/task-validate.json task validate docs/tasks/<task-id>.md
-python -m pipeline_tools --format json lifecycle status . --task-id <task-id> --evidence .workflow/<task-id>
-python -m pipeline_tools dispatch write dispatch.json .workflow/<task-id>/dispatch.json
-python -m pipeline_tools result verify .workflow/<task-id>/reviewer-result.json --task-id <task-id> --role reviewer
-python -m pipeline_tools --format json freshness . .workflow/<task-id> --result .workflow/<task-id>/reviewer-result.json
-python -m pipeline_tools --format json evidence readiness .workflow/<task-id> --task-id <task-id>
+python -m pipeline_tools --format json --output .pipeline/<task-id>/task-validate.json task validate docs/tasks/<task-id>.md
+python -m pipeline_tools --format json lifecycle status . --task-id <task-id> --evidence .pipeline/<task-id>
+python -m pipeline_tools dispatch write dispatch.json .pipeline/<task-id>/dispatch.json
+python -m pipeline_tools result verify .pipeline/<task-id>/reviewer-result.json --task-id <task-id> --role reviewer
+python -m pipeline_tools --format json freshness . .pipeline/<task-id> --result .pipeline/<task-id>/reviewer-result.json
+python -m pipeline_tools --format json evidence readiness .pipeline/<task-id> --task-id <task-id>
 ```
 
-自动事件和 `metrics record` 事件都逐文件原子写入 `.workflow/metrics/`。只有 `observed` 和 `derived` 进入核心聚合；`reported` 只留作追溯。详见 `references/metrics-contract.md`。
+自动事件和 `metrics record` 事件都逐文件原子写入 `.pipeline/metrics/`。只有 `observed` 和 `derived` 进入核心聚合；`reported` 只留作追溯。旧项目仅有 `.workflow/` 时继续读写旧目录，迁移后以 `.pipeline/` 为准。详见 `references/metrics-contract.md`。
 
 `metrics import-opencode-session` 只从 OpenCode Desktop 的结构化导出中提取可验证的工具错误、子代理错误和用户流程纠正信号；不会把自然语言 PASS 当作验收事实。`runtime preflight` 应在派发 executor/reviewer 前执行，`runtime role-scope` 用于阻止未授权的主代理产品代码修改。正式 `evidence verify` 前先执行 `evidence readiness`，避免把尚未生成 final-check 的正常阶段顺序误报为最终证据缺陷。
 

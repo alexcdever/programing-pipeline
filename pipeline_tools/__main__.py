@@ -12,6 +12,7 @@ import time
 from pathlib import Path
 
 from .contract import validate_task
+from .layout import PIPELINE_DIR_NAMES
 from .core import (
     BLOCKED,
     CONFIG,
@@ -317,9 +318,10 @@ def _git_root(start: Path) -> Path:
     for candidate in (value, *value.parents):
         if (candidate / ".git").exists():
             return candidate
-    if ".workflow" in value.parts:
-        workflow_index = value.parts.index(".workflow")
-        return Path(*value.parts[:workflow_index])
+    for layout_name in PIPELINE_DIR_NAMES:
+        if layout_name in value.parts:
+            layout_index = value.parts.index(layout_name)
+            return Path(*value.parts[:layout_index])
     return value
 
 
@@ -351,12 +353,12 @@ def _int_arg(args: argparse.Namespace, name: str, default: int = 0) -> int:
 
 
 def _task_id_from_path(value: Path | None) -> str | None:
-    """Extract a task id from the conventional .workflow/<task-id>/ path."""
+    """Extract a task id from the .pipeline or legacy .workflow path."""
     if value is None:
         return None
     parts = value.resolve().parts
     try:
-        index = next(index for index, part in enumerate(parts) if part == ".workflow")
+        index = next(index for index, part in enumerate(parts) if part in PIPELINE_DIR_NAMES)
     except StopIteration:
         return None
     if index + 1 >= len(parts) or parts[index + 1] == "metrics":
@@ -440,8 +442,8 @@ def _evidence_root_from_reference(reference: str | None) -> str | None:
         return None
     parts = Path(reference).parts
     try:
-        index = parts.index(".workflow")
-    except ValueError:
+        index = next(index for index, part in enumerate(parts) if part in PIPELINE_DIR_NAMES)
+    except StopIteration:
         return None
     if index + 1 >= len(parts) or parts[index + 1] == "metrics":
         return None

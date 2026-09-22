@@ -1,7 +1,7 @@
 ---
 name: programing-pipeline
 description: "Use when an agent plans, builds, reviews, or merges code."
-version: 0.7.1
+version: 0.8.0
 author: Alex Chen (alexcdever)
 license: MIT
 platforms: [linux, macos, windows]
@@ -46,7 +46,7 @@ AI agent 修改、重构、修复、扩展或验证 Git 项目时使用，尤其
 
 主代理把执行/审查子代理视为阶段性工具调用。子代理返回只证明该阶段返回，不证明任务完成；主代理不得因为收到子代理结果、看到测试摘要或已经写出阶段总结，就结束当前任务。
 
-- 每个子代理返回后，主代理必须重新读取当前任务单、Git/worktree 身份和本轮 `.workflow/<task-id>/` 证据，核对 task-id、branch、HEAD、角色和报告新鲜度。
+- 每个子代理返回后，主代理必须重新读取当前任务单、Git/worktree 身份和本轮 `.pipeline/<task-id>/` 证据，核对 task-id、branch、HEAD、角色和报告新鲜度。
 - 任务单规定还有后续阶段时，主代理必须继续推进下一个阶段，而不是先向用户发送总结；阶段性报告不是终止条件。
 - 标准闭环是：执行子代理 → 独立审查子代理 → 主代理最终检查 → 合并后主工作树复验。审查通过不等于主代理最终检查通过。
 - 子代理返回 FAIL、BLOCKED、超时或证据缺失时，主代理必须分类并按恢复规则保留现场、建立延续任务或上报阻塞；不得把阶段结果改写为 PASS，也不得跳过后续核验。
@@ -64,7 +64,7 @@ AI agent 修改、重构、修复、扩展或验证 Git 项目时使用，尤其
 
 - 工具输出的退出码和原始日志是机械事实；终端摘要不替代日志。
 - 在派发 executor/reviewer 前先运行 runtime preflight，确认 Node/pnpm/Git、native ABI 和项目所需测试能力；环境不匹配不得伪装成产品失败或继续正式验收。
-- 子代理启动后先执行 `runtime handshake`：确认可读任务与 worktree、可执行验收命令、可写 `.workflow/**`，reviewer 不可写产品代码；握手 JSON 必须落在当前任务证据目录。
+- 子代理启动后先执行 `runtime handshake`：确认可读任务与 worktree、可执行验收命令、可写 `.pipeline/**`，reviewer 不可写产品代码；握手 JSON 必须落在当前任务证据目录。
 - 主代理未经用户明确授权不得修改产品代码；executor/reviewer 失败后应重派、建立 continuation 或保留决策点，不得接管实现。
 - OpenCode Desktop 会话可用 `metrics import-opencode-session` 导入结构化流程信号；导入器不得从自然语言推断产品 PASS。
 - 程序化命令应优先使用 `--format json --output <path>`；JSON 结果是后续阶段的权威输入，终端短摘要不作为流程状态来源。
@@ -72,7 +72,7 @@ AI agent 修改、重构、修复、扩展或验证 Git 项目时使用，尤其
 - 结构化执行闭环使用 `dispatch write`、`result verify` 和 `freshness`；只有当前 task-id、角色、HEAD、验收结果和证据引用均通过机械校验，才能把语义代理的 recommendation 交给下一阶段。
 - 工具不可用、命令超时、证据缺失或身份/范围漂移时标为 `BLOCKED`/漂移，不绕过工具改写成 PASS。
 - 报告必须包含机器可读的 `pipeline-evidence` 区块；自然语言报告不能单独产生验收结论。
-- 每个非 `metrics` 的 `pipeline-tools` 阶段命令默认自动写入一个 `observed` 结果事件到项目 `.workflow/metrics/`；超时、环境阻塞、证据缺口、范围漂移等只根据机械退出码和结构化结果追加 `derived` 反馈事件。该目录应纳入 Git 追踪，作为可审查的流程改进历史。`reported` 只能保留追溯，统计不参与验收，不自动改写技能或契约。
+- 每个非 `metrics` 的 `pipeline-tools` 阶段命令默认自动写入一个 `observed` 结果事件到项目 `.pipeline/metrics/`；超时、环境阻塞、证据缺口、范围漂移等只根据机械退出码和结构化结果追加 `derived` 反馈事件。该目录应纳入 Git 追踪，作为可审查的流程改进历史。旧项目若仍只有 `.workflow/`，工具继续写入旧目录；完成迁移后新写入 `.pipeline/`。`reported` 只能保留追溯，统计不参与验收，不自动改写技能或契约。
 - 自动采集不得从自然语言报告推断产品 PASS；不得记录 prompt、完整命令输出、凭据、token 或业务数据。仅在测试/明确诊断时使用 `PIPELINE_TOOLS_DISABLE_AUTO_METRICS=1` 关闭。
 - 正式 `evidence verify` 前先运行 `evidence readiness`；缺 final-check 或必要报告时记录“未准备好”，不要把阶段顺序问题误作产品验收失败。指标报告优先按 task/run/terminal 维度解释，不用全项目累计 `success_rate` 代替终态结论。
 - 正常只把短摘要放入上下文；完整输出、报告和统计事件留在项目文件中，需要诊断时再读取。
@@ -94,7 +94,7 @@ AI agent 修改、重构、修复、扩展或验证 Git 项目时使用，尤其
 
 1. 恢复核对：读入口文档、路线图、任务指针、Git 状态、已有证据；发现多个活动任务或状态不一致，先 reconcile；禁止盲目重派或重建现场。
 2. 规划拆分：以用户行为或可验证能力为单位；定依赖、范围、契约、风险、决策点、验收矩阵；未写成具体用例即设计未完成。有产物依赖顺序执行；仅文件范围与 fixture 完全不重叠且无隐含依赖才并行。
-3. 冻结任务单：默认 `docs/tasks/<task-id>.md`，证据 `.workflow/<task-id>/`；提交任务单后记录契约提交，主代理从主工作树用 `git worktree add` 创建 `<仓库根目录>/.worktrees/<task-id>`，确认主分支 HEAD、新 worktree、branch 与契约提交的关系；之后契约冻结。
+3. 冻结任务单：默认 `docs/tasks/<task-id>.md`，证据 `.pipeline/<task-id>/`；提交任务单后记录契约提交，主代理从主工作树用 `git worktree add` 创建 `<仓库根目录>/.worktrees/<task-id>`，确认主分支 HEAD、新 worktree、branch 与契约提交的关系；之后契约冻结。
 4. 执行：子代理只在任务 worktree 实现；用户功能贯通 UI→前端/协议→核心→领域事实→持久化/投影→回显→重启恢复；纯基建任务标 prerequisite，不得冒充产品闭环。
 5. 独立审查：新上下文核身份和报告新鲜度，逐条复验；通过 ≠ 已合并。
 6. 最终检查：读任务单/执行/审查/最终检查报告，抽查高风险测试，重跑关键验收、全量测试、构建、lint、范围、冲突检查；全部有证据才 ready-to-merge。
@@ -103,7 +103,7 @@ AI agent 修改、重构、修复、扩展或验证 Git 项目时使用，尤其
 
 ## 证据目录最小要求
 
-`.workflow/<task-id>/` 至少含 `executor-report.md`、`review-report.md`、`final-check.md`；每份写明 task-id、worktree、branch、轮次、命令、退出码、关键断言和证据文件。旧任务目录仅作历史。
+`.pipeline/<task-id>/` 至少含 `executor-report.md`、`review-report.md`、`final-check.md`；每份写明 task-id、worktree、branch、轮次、命令、退出码、关键断言和证据文件。迁移前的 `.workflow/<task-id>/` 是兼容的旧路径，不能因改名自动删除或覆盖。
 
 ## 任务规模与延续任务
 

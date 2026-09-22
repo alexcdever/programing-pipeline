@@ -18,6 +18,8 @@
     "references/metrics-contract.md",
     ".gitignore",
     "docs/tasks/pipeline-tools-v1.md",
+    ".pipeline/metrics/**",
+    ".pipeline/pipeline-tools-v1-continuation-1/**",
     ".workflow/metrics/**",
     ".workflow/pipeline-tools-v1-continuation-1/**"
   ],

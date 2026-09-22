@@ -7,7 +7,7 @@
 
 - 项目：programing-pipeline（内置 `pipeline_tools`）
 - 领域或阶段：工作流机械化 / v1
-- 用户结果或系统能力：使用不依赖大模型判断的 Python 命令程序，校验任务契约、Git 身份、改动范围、任务证据和有界命令执行，并在项目 `.workflow/metrics/` 生成脱敏反馈统计。
+- 用户结果或系统能力：使用不依赖大模型判断的 Python 命令程序，校验任务契约、Git 身份、改动范围、任务证据和有界命令执行，并在项目 `.pipeline/metrics/` 生成脱敏反馈统计。
 - 状态：已合并；自动指标采集由 `pipeline-tools-v1-continuation-1` 补充
 
 ## 依赖与范围
@@ -40,7 +40,7 @@
 ### 已确认事实
 
 - 当前技能已有 `scripts/validate_task_sheet.py`，但只做 Markdown 结构检查。
-- 当前技能要求任务证据位于 `.workflow/<task-id>/`，项目级反馈数据应位于 `.workflow/metrics/`。
+- 新任务使用 `.pipeline/<task-id>/` 和 `.pipeline/metrics/`；迁移前的 `.workflow/<task-id>/`、`.workflow/metrics/` 仍由兼容工具读取。
 - 机械校验应 fail closed；统计数据是派生反馈，不是验收证据。
 
 ### 未验证事实
@@ -58,7 +58,7 @@
 
 主代理提供已冻结任务单、项目根目录和明确命令参数；工具程序只执行可验证的机械检查或记录已声明事实：
 
-触发命令 → 解析任务契约/Git/报告/命令输出 → 生成结构化 PASS、FAIL、BLOCKED 或契约漂移结果 → 原始输出落盘、终端只返回短摘要；metrics 写入项目 `.workflow/metrics/`，作为可审查工作流历史进入 Git。
+触发命令 → 解析任务契约/Git/报告/命令输出 → 生成结构化 PASS、FAIL、BLOCKED 或契约漂移结果 → 原始输出落盘、终端只返回短摘要；metrics 写入新项目的 `.pipeline/metrics/`，旧项目按兼容规则写入 `.workflow/metrics/`，作为可审查流水线历史进入 Git。
 
 - 工具程序使用稳定退出码：`0` 通过，`1` 观察到产品/测试失败，`2` 参数或配置错误，`3` 证据不足或环境阻塞，`4` 身份、契约或范围漂移。
 - 任务单中的 `pipeline-contract` JSON 区块是机械检查投影；任务单正文供人阅读，工具不得通过自由文本补全缺失字段。
@@ -82,6 +82,8 @@
     "templates/task-sheet.md",
     "scripts/validate_task_sheet.py",
     "docs/tasks/pipeline-tools-v1.md",
+    ".pipeline/metrics/**",
+    ".pipeline/pipeline-tools-v1/**",
     ".workflow/metrics/**",
     ".workflow/pipeline-tools-v1/**"
   ],
@@ -154,7 +156,7 @@
 
 ### 验收测试5：项目级脱敏反馈统计
 
-- 触发：初始化 `.workflow/metrics/`，记录 observed/derived/reported 事件，聚合并输出报告。
+- 触发：初始化新项目的 `.pipeline/metrics/`，或识别旧项目的 `.workflow/metrics/`，记录 observed/derived/reported 事件，聚合并输出报告。
 - 断言：每事件独立原子文件；任务和项目标识不保存绝对路径；reported 不进入核心成功率；缺失 token 为 null/unknown；审查推翻、重试、超时、证据缺口和合并后回归可从 observed/derived 事件计算；汇总可由事件重建。
 - 测试：`tests/test_metrics.py`：脱敏、聚合、重建和未知值用例。
 - 命令：`python -m unittest discover -s tests -p 'test_metrics.py' -v`

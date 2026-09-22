@@ -1,6 +1,6 @@
 # 项目级反馈事件契约
 
-项目级反馈是从 `pipeline-tools` 的机械执行结果派生的、可审查的流程统计，不是验收证据，不回写任务契约、技能规则或产品数据。目录固定为项目根目录的 `.workflow/metrics/`，默认由工具自动创建并写入；指标文件应纳入 Git 追踪，不应加入项目 `.gitignore`。
+项目级反馈是从 `pipeline-tools` 的机械执行结果派生的、可审查的流水线统计，不是验收证据，不回写任务契约、技能规则或产品数据。新项目目录固定为项目根目录的 `.pipeline/metrics/`，默认由工具自动创建并写入；指标文件应纳入 Git 追踪，不应加入项目 `.gitignore`。迁移前只有 `.workflow/metrics/` 的旧项目继续使用旧目录；工具读取两种布局，若两者同时存在则合并读取并按 `event_id` 去重。
 
 ## 自动采集边界
 
@@ -51,7 +51,7 @@
   "token_count": null,
   "reason": null,
   "attempt": 0,
-  "evidence_ref": ".workflow/task-id/raw-command.log",
+  "evidence_ref": ".pipeline/task-id/raw-command.log",
   "blocker_class": null,
   "source": null,
   "run_id": null,
