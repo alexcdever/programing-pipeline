@@ -9,6 +9,10 @@ LEGACY_PIPELINE_DIR_NAME = ".workflow"
 PIPELINE_DIR_NAMES = (PIPELINE_DIR_NAME,)
 
 
+class LegacyPipelineLayoutError(ValueError):
+    """Raised when a project has not migrated its legacy evidence directory."""
+
+
 def migrate_layout(root: Path) -> tuple[int, str]:
     """Move a legacy .workflow tree to .pipeline without overwriting files."""
     import hashlib
@@ -19,7 +23,7 @@ def migrate_layout(root: Path) -> tuple[int, str]:
     if not legacy.exists():
         return 0, "absent"
     if canonical.exists():
-        raise RuntimeError("both .workflow and .pipeline exist; reconcile before migration")
+        raise LegacyPipelineLayoutError("both .workflow and .pipeline exist; reconcile before migration")
 
     def manifest(directory: Path) -> dict[str, tuple[int, str]]:
         return {
@@ -34,25 +38,18 @@ def migrate_layout(root: Path) -> tuple[int, str]:
     before = manifest(legacy)
     os.rename(legacy, canonical)
     if before != manifest(canonical):
-        raise RuntimeError("migration changed file contents")
+        raise LegacyPipelineLayoutError("migration changed file contents")
     return len(before), "migrated"
 
 
 def active_pipeline_dir(root: Path) -> Path:
-    """Choose where new artifacts go without breaking a legacy-only project."""
-    canonical = root / PIPELINE_DIR_NAME
-    legacy = root / LEGACY_PIPELINE_DIR_NAME
-    if canonical.is_dir():
-        return canonical
-    if legacy.is_dir():
-        return legacy
-    return canonical
+    """Return the canonical directory; legacy projects must migrate first."""
+    return root / PIPELINE_DIR_NAME
 
 
 def metrics_dirs(root: Path) -> list[Path]:
-    """Return metric directories from both layouts for migration-safe reads."""
-    existing = [root / name / "metrics" for name in PIPELINE_DIR_NAMES if (root / name).is_dir()]
-    return existing or [root / PIPELINE_DIR_NAME / "metrics"]
+    """Return only the canonical metrics directory."""
+    return [root / PIPELINE_DIR_NAME / "metrics"]
 
 
 def is_metrics_path(path: str) -> bool:
@@ -67,8 +64,8 @@ def is_metrics_path(path: str) -> bool:
 
 
 def evidence_root(directory: Path) -> Path:
-    """Find the project root for either supported evidence layout."""
-    if directory.parent.name in PIPELINE_DIR_NAMES:
+    """Find the project root for the canonical evidence layout."""
+    if directory.parent.name == PIPELINE_DIR_NAME:
         return directory.parent.parent
     return directory
 
