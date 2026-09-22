@@ -1,7 +1,7 @@
 ---
 name: programing-pipeline
 description: "Use when an agent plans, builds, reviews, or merges code."
-version: 0.7.0
+version: 0.7.1
 author: Alex Chen (alexcdever)
 license: MIT
 platforms: [linux, macos, windows]
@@ -12,7 +12,7 @@ metadata:
 
 # 编程工作流
 
-与具体产品和工具无关的多代理编程工作流：定义主代理、执行子代理、审查子代理之间的协作契约，以及任务单、验收测试、证据、恢复与合并规则。不规定具体子代理调用方式、命令或通知方式。
+与具体产品和工具无关的多代理编程工作流：定义主代理、执行子代理、审查子代理之间的协作契约，以及任务单、验收测试、证据、恢复与合并规则。不规定具体子代理调用方式或通知方式；实现 worktree 的路径、创建和核对规则除外。
 
 ## 适用场景
 
@@ -26,6 +26,21 @@ AI agent 修改、重构、修复、扩展或验证 Git 项目时使用，尤其
 - **主代理**：读状态 → 拆任务 → 写任务单+逐条验收测试 → 提交冻结后派发 → 调度执行/审查子代理 → 核全部证据并重跑关键验收 → 更新任务单/路线图 → 全闸门通过后合并并在主工作树复验。不默认替执行子代理写业务代码；遇真实决策点保留现场停下，不猜测。
 - **执行子代理**：在指定 worktree 按红→绿→蓝实现冻结任务单；跑验收命令与必要回归；只在自己任务证据目录写执行报告。不改冻结目标/范围/验收测试，不自行扩大产品设计。
 - **审查子代理**：独立上下文读任务单、代码、执行报告；亲自重跑验收测试；查正确性、边界、范围、覆盖率与证据新鲜度；发现问题报 BLOCKED/FAIL。默认只读，不改产品代码。
+
+## 实现 worktree 约定
+
+- 任务单契约提交后，由主代理从主工作树创建该任务唯一的实现 worktree。标准路径是 `<仓库根目录>/.worktrees/<task-id>`；不得使用仓库同级目录、项目内的 `worktrees/`，也不得为同一个任务创建第二个实现 worktree。
+- 必须从主工作树根目录执行：
+
+  ```bash
+  git worktree add -b "<branch>" ".worktrees/<task-id>" "<baseline-head>"
+  ```
+
+  `git worktree add` 会创建不存在的目标目录及缺失的 `.worktrees` 父目录；不需要先执行 `mkdir`。该命令同时把目录登记为 Git worktree。目标路径已存在、分支已被其他 worktree 使用或身份不明确时，先停止并 reconcile，不得换到仓库外另建目录绕过冲突。
+- 创建前确认 `git rev-parse --show-toplevel`、`git status --short --branch` 和 `git worktree list --porcelain`；创建后再次运行 `git worktree list --porcelain`，并用目标 worktree 的 `git rev-parse --show-toplevel`、`git branch --show-current` 和 `git rev-parse HEAD` 核对路径、分支和基线。
+- 任务单的“执行 worktree”和 executor/reviewer dispatch 必须记录核对后的绝对路径。执行子代理和审查子代理使用主代理传入的路径，不得自行选择或创建另一个 worktree；独立审查上下文不等于再创建一个 Git worktree。
+- 项目根目录的 `.gitignore` 必须忽略 `/.worktrees/`，避免实现 worktree 的文件污染主工作树状态。缺少该规则时，须在允许修改范围内先补齐并记录；不能在契约冻结后静默扩大范围。
+- 发现任务单、dispatch、报告或 `git worktree list` 中的路径不一致，必须标记身份漂移并保留现场；不得把仓库同级目录或第二个路径改写成规范路径后继续执行。
 
 ## 主代理阶段推进不变量
 
@@ -64,7 +79,7 @@ AI agent 修改、重构、修复、扩展或验证 Git 项目时使用，尤其
 
 ## 不可违反的规则
 
-1. 任务单先于实现：契约必须提交后才能建 worktree 或派发。
+1. 任务单先于实现：契约必须提交后才能创建唯一 `.worktrees/<task-id>` 实现 worktree 或派发；执行/审查子代理不得另建 worktree。
 2. 契约冻结：不得为迁就实现改验收测试；设计变更记裁决并开延续任务（机器 task-id/path 保留 `continuation`），保留原历史。
 3. 验收测试即用例：每条必须指向当前测试文件、用例、断言、命令、结果边界。
 4. 独立审查：独立上下文直接复验；转述他人结果不算。
@@ -79,7 +94,7 @@ AI agent 修改、重构、修复、扩展或验证 Git 项目时使用，尤其
 
 1. 恢复核对：读入口文档、路线图、任务指针、Git 状态、已有证据；发现多个活动任务或状态不一致，先 reconcile；禁止盲目重派或重建现场。
 2. 规划拆分：以用户行为或可验证能力为单位；定依赖、范围、契约、风险、决策点、验收矩阵；未写成具体用例即设计未完成。有产物依赖顺序执行；仅文件范围与 fixture 完全不重叠且无隐含依赖才并行。
-3. 冻结任务单：默认 `docs/tasks/<task-id>.md`，证据 `.workflow/<task-id>/`；提交任务单后记录契约提交，创建 worktree 前确认主分支 HEAD、新 worktree、branch 与契约提交的关系；之后契约冻结。
+3. 冻结任务单：默认 `docs/tasks/<task-id>.md`，证据 `.workflow/<task-id>/`；提交任务单后记录契约提交，主代理从主工作树用 `git worktree add` 创建 `<仓库根目录>/.worktrees/<task-id>`，确认主分支 HEAD、新 worktree、branch 与契约提交的关系；之后契约冻结。
 4. 执行：子代理只在任务 worktree 实现；用户功能贯通 UI→前端/协议→核心→领域事实→持久化/投影→回显→重启恢复；纯基建任务标 prerequisite，不得冒充产品闭环。
 5. 独立审查：新上下文核身份和报告新鲜度，逐条复验；通过 ≠ 已合并。
 6. 最终检查：读任务单/执行/审查/最终检查报告，抽查高风险测试，重跑关键验收、全量测试、构建、lint、范围、冲突检查；全部有证据才 ready-to-merge。

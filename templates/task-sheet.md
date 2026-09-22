@@ -27,6 +27,7 @@
 - 项目：<project name>
 - 领域或阶段：<area / phase>
 - 用户结果或系统能力：<one verifiable outcome>
+- 执行 worktree 约定：`<仓库根目录>/.worktrees/<task-id>`，由主代理用 `git worktree add` 创建；不预先 `mkdir`，不创建仓库同级或第二个 worktree
 - 状态：未开始
 
 ## 依赖与范围
@@ -113,7 +114,7 @@
 - 基线 HEAD：-
 - 契约提交：-
 - 执行分支：-
-- 执行 worktree：-
+- 执行 worktree：<仓库根目录>/.worktrees/<task-id>（核对后的绝对路径）
 
 ### 验收台账
 

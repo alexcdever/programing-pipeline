@@ -14,8 +14,17 @@
 - 任务单：`docs/tasks/<task-id>.md`
 - 任务证据：`.workflow/<task-id>/`
 - 项目级统计：`.workflow/metrics/`（由工具自动生成并纳入 Git 追踪）
+- 执行 worktree：`.worktrees/<task-id>`（主代理从主工作树创建唯一目录）
 - 任务契约提交后冻结
 - 合并前需要执行、独立审查和主代理终检；合并后在主工作树复验
+
+创建实现 worktree 时，从仓库根目录执行：
+
+```bash
+git worktree add -b "<branch>" ".worktrees/<task-id>" "<baseline-head>"
+```
+
+`git worktree add` 会创建目标目录及缺失的 `.worktrees` 父目录，不需要预先 `mkdir`。项目根目录的 `.gitignore` 应包含 `/.worktrees/`。执行和审查子代理只使用主代理传入的 worktree，不自行创建第二个目录。
 
 ## 机械工具
 

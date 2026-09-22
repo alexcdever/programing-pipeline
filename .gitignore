@@ -4,5 +4,6 @@ __pycache__/
 .venv/
 .env
 .workflow/metrics-export.json
+/.worktrees/
 .DS_Store
 Thumbs.db

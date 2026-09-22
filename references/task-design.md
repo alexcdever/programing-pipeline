@@ -43,6 +43,18 @@
 
 不能为让测试变绿而删除困难验收测试，也不能把未验证环境降级伪装成已验证。
 
+## Worktree 创建
+
+任务单契约提交后，主代理从主工作树根目录创建唯一实现 worktree：
+
+```bash
+git worktree add -b "<branch>" ".worktrees/<task-id>" "<baseline-head>"
+```
+
+标准路径是 `<仓库根目录>/.worktrees/<task-id>`。`git worktree add` 会创建不存在的目标目录及缺失的 `.worktrees` 父目录，不需要先用 `mkdir`；不要因为目录尚未存在而改用仓库同级路径。创建前后都要用 `git worktree list --porcelain` 核对，并把核对后的绝对路径写入任务单和 dispatch。
+
+项目根目录的 `.gitignore` 必须包含 `/.worktrees/`。如果缺少该规则，只有在任务单允许范围内补齐并记录后才能创建；否则停下报告范围问题。执行/审查子代理不得自行创建第二个 worktree，路径或分支冲突必须先 reconcile。
+
 ## 产品替换的测试迁移
 
 删除或替换旧行为时，任务单须列出：

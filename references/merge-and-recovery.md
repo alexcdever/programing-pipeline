@@ -1,5 +1,11 @@
 # 恢复、合并与主工作树复验
 
+## Worktree 路径与恢复
+
+实现 worktree 的规范路径是 `<仓库根目录>/.worktrees/<task-id>`，由主代理在契约提交后用 `git worktree add` 创建；Git 会创建缺失的目标目录和父目录，不需要预先 `mkdir`。合并或恢复前必须以当前 `git worktree list --porcelain` 为准，核对任务单、dispatch、报告和实际路径一致。
+
+发现仓库同级 worktree、项目内第二个 worktree、路径漂移或同一 branch 被多个 worktree 占用时，先保留所有现场并 reconcile；不得删除、移动或重新创建来掩盖身份问题。失败恢复继续使用已核对的 worktree；如果必须更换路径，记录裁决并按延续任务处理。
+
 ## 后台运行与通知边界
 
 长任务可后台运行，配合冻结检测、完成通知或自动恢复；这些机制不是工作流角色，不参与验收：

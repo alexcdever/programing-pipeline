@@ -1,5 +1,9 @@
 # 执行子代理与审查子代理
 
+## Worktree 身份
+
+主代理在契约提交后创建唯一的 `<仓库根目录>/.worktrees/<task-id>`，并在 dispatch 中传入绝对路径。执行子代理和审查子代理必须先核对该路径、branch、task-id 与 `git worktree list --porcelain` 一致，再在指定 worktree 工作；不得自行运行 `git worktree add`，不得改用仓库同级目录或为同一任务创建第二个 worktree。独立审查上下文不要求新建 Git worktree。
+
 ## 执行子代理
 
 收到的是已提交且冻结的任务单，不是可自由重写的目标。标准循环：
