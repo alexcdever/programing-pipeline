@@ -1,7 +1,7 @@
 # 通用任务单
 
 <!-- Task ID: <task-id> -->
-<!-- Contract section is frozen after commit. Lifecycle sections are maintained by the main agent. -->
+<!-- Contract section is frozen after commit. Lifecycle sections are maintained by the main agent in this task sheet; no separate progress tracker is required. -->
 
 ```pipeline-contract
 {

@@ -1,4 +1,4 @@
-"""Command-line entry point for programing-pipeline-tools."""
+"""Command-line entry point for pipeline-tools."""
 
 from __future__ import annotations
 
