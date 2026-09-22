@@ -1,7 +1,7 @@
 ---
 name: pipeline
 description: "Use when an agent plans, builds, reviews, or merges code."
-version: 1.0.0
+version: 0.9.0
 author: Alex Chen (alexcdever)
 license: MIT
 platforms: [linux, macos, windows]
