@@ -40,7 +40,7 @@
 ### 已确认事实
 
 - 当前技能已有 `scripts/validate_task_sheet.py`，但只做 Markdown 结构检查。
-- 新任务和迁移后的任务统一使用 `.pipeline/<task-id>/` 和 `.pipeline/metrics/`；旧 `.pipeline/` 只作为待迁移现场。
+- 新任务和自动迁移后的任务统一使用 `.pipeline/<task-id>/` 和 `.pipeline/metrics/`；旧 `.workflow/` 只在工具首次访问时触发自动迁移。
 - 机械校验应 fail closed；统计数据是派生反馈，不是验收证据。
 
 ### 未验证事实
@@ -58,7 +58,7 @@
 
 主代理提供已冻结任务单、项目根目录和明确命令参数；工具程序只执行可验证的机械检查或记录已声明事实：
 
-触发命令 → 解析任务契约/Git/报告/命令输出 → 生成结构化 PASS、FAIL、BLOCKED 或契约漂移结果 → 原始输出落盘、终端只返回短摘要；metrics 统一写入 `.pipeline/metrics/`，旧 `.pipeline/` 必须先迁移，作为可审查流水线历史进入 Git。
+触发命令 → 检测并自动迁移旧 `.workflow/` → 解析任务契约/Git/报告/命令输出 → 生成结构化 PASS、FAIL、BLOCKED 或契约漂移结果 → 原始输出落盘、终端只返回短摘要；metrics 统一写入 `.pipeline/metrics/`，作为可审查流水线历史进入 Git。
 
 - 工具程序使用稳定退出码：`0` 通过，`1` 观察到产品/测试失败，`2` 参数或配置错误，`3` 证据不足或环境阻塞，`4` 身份、契约或范围漂移。
 - 任务单中的 `pipeline-contract` JSON 区块是机械检查投影；任务单正文供人阅读，工具不得通过自由文本补全缺失字段。
@@ -154,7 +154,7 @@
 
 ### 验收测试5：项目级脱敏反馈统计
 
-- 触发：在 `.pipeline/metrics/` 记录 observed/derived/reported 事件，聚合并输出报告；若发现旧 `.pipeline/metrics/`，先迁移再执行。
+- 触发：工具命令自动确保 `.pipeline/metrics/` 存在后记录 observed/derived/reported 事件，聚合并输出报告；首次发现旧 `.workflow/metrics/` 时先自动迁移。
 - 断言：每事件独立原子文件；任务和项目标识不保存绝对路径；reported 不进入核心成功率；缺失 token 为 null/unknown；审查推翻、重试、超时、证据缺口和合并后回归可从 observed/derived 事件计算；汇总可由事件重建。
 - 测试：`tests/test_metrics.py`：脱敏、聚合、重建和未知值用例。
 - 命令：`python -m unittest discover -s tests -p 'test_metrics.py' -v`

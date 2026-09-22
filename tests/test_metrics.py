@@ -23,13 +23,16 @@ class MetricsTests(unittest.TestCase):
             self.assertNotIn(str(root), raw)
             self.assertIn('null', raw)
 
-    def test_legacy_layout_requires_migration_before_use(self):
+    def test_legacy_layout_is_automatically_migrated_on_metric_access(self):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
             legacy = root / '.workflow' / 'metrics'
             legacy.mkdir(parents=True)
-            (legacy / 'event.json').write_text('{}', encoding='utf-8')
-            self.assertEqual(metrics_dirs(root), [root / '.pipeline' / 'metrics'])
+            (legacy / 'event.json').write_text('{"schema": 1, "confidence": "observed", "event": "old", "result": "pass"}', encoding='utf-8')
+            directories = metrics_dirs(root)
+            self.assertEqual(directories, [root / '.pipeline' / 'metrics'])
+            self.assertFalse((root / '.workflow').exists())
+            self.assertTrue((root / '.pipeline' / 'metrics' / 'event.json').exists())
 
     def test_sensitive_identifiers_are_redacted_at_metric_boundary(self):
         with tempfile.TemporaryDirectory() as d:

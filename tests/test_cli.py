@@ -119,6 +119,17 @@ class CLITests(unittest.TestCase):
             self.assertEqual(p.returncode, 0, (p.stdout, p.stderr))
             self.assertEqual(list(metrics_dirs(root)[-1].glob('*.json')), [])
 
+    def test_cli_automatically_migrates_legacy_workflow_directory(self):
+        with tempfile.TemporaryDirectory() as d:
+            root, _ = make_repo(d)
+            legacy = root / '.workflow' / 'metrics'
+            legacy.mkdir(parents=True)
+            (legacy / 'old.json').write_text('{"schema": 1, "confidence": "observed", "event": "old", "result": "pass"}', encoding='utf-8')
+            p = run_cli(['metrics', 'aggregate', str(root)])
+            self.assertEqual(p.returncode, 0, (p.stdout, p.stderr))
+            self.assertFalse((root / '.workflow').exists())
+            self.assertTrue((root / '.pipeline' / 'metrics' / 'old.json').exists())
+
     def test_workflow_command_automatically_records_tracked_metric(self):
         with tempfile.TemporaryDirectory() as d:
             root, _ = make_repo(d)

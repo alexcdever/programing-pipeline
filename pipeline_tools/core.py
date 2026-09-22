@@ -14,7 +14,7 @@ import hashlib
 from pathlib import Path
 from typing import Any
 
-from .layout import active_pipeline_dir, evidence_root, is_metrics_path, metrics_dirs
+from .layout import active_pipeline_dir, canonical_evidence_dir, evidence_root, is_metrics_path, metrics_dirs
 
 PASS, FAIL, CONFIG, BLOCKED, DRIFT = 0, 1, 2, 3, 4
 REPORT_NAMES = ("executor-report.md", "review-report.md", "final-check.md")
@@ -225,6 +225,9 @@ def scope_check(root: Path, allowed: list[str], forbidden: list[str]) -> list[st
         # tracked by the host project. They must not turn every frozen task
         # scope check into a product-scope failure.
         normalized = _normalize_path(path)
+        if normalized == ".workflow/metrics" or normalized.startswith(".workflow/metrics/"):
+            active_pipeline_dir(root)
+            normalized = normalized.replace(".workflow/", ".pipeline/", 1)
         forbidden_match = any(_matches(path, pattern, root) for pattern in forbidden)
         allowed_match = any(_matches(path, pattern, root) for pattern in allowed)
         if is_metrics_path(normalized) and not forbidden_match:
@@ -248,6 +251,10 @@ def _validate_evidence_ref(value: Any) -> bool:
 
 def _evidence_root(directory: Path) -> Path:
     return evidence_root(directory)
+
+
+def _canonical_evidence_dir(directory: Path) -> Path:
+    return canonical_evidence_dir(directory)
 
 
 def _evidence_file_exists(directory: Path, reference: Any) -> bool:
@@ -292,6 +299,7 @@ def _read_machine_evidence(path: Path) -> tuple[dict[str, Any] | None, list[str]
 
 def evidence_verify(directory: Path, task_id: str, branch: str | None = None) -> list[str]:
     """Verify machine-readable report identity and minimum evidence fields."""
+    directory = _canonical_evidence_dir(directory)
     errors: list[str] = []
     reports: dict[str, dict[str, Any]] = {}
     valid_statuses = {
@@ -398,6 +406,7 @@ def _metric_bool(value: Any, default: bool = False) -> bool:
 
 def evidence_readiness(directory: Path, task_id: str) -> dict[str, Any]:
     """Check whether the evidence set is ready for formal verification."""
+    directory = _canonical_evidence_dir(directory)
     required = ["executor-report.md", "review-report.md", "final-check.md"]
     missing = [name for name in required if not (directory / name).is_file()]
     result = "ready" if not missing else "not_ready"
@@ -992,6 +1001,7 @@ def purge_metrics(root: Path) -> int:
 
 def gate_check(directory: Path, task_id: str, branch: str | None, phase: str) -> list[str]:
     """Run evidence checks and the minimum phase-specific merge gates."""
+    directory = _canonical_evidence_dir(directory)
     errors = evidence_verify(directory, task_id, branch)
     root = _evidence_root(directory)
     reports: dict[str, dict[str, Any]] = {}

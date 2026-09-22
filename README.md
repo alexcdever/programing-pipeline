@@ -74,7 +74,7 @@ python -m pipeline_tools --format json freshness . .pipeline/<task-id> --result 
 python -m pipeline_tools --format json evidence readiness .pipeline/<task-id> --task-id <task-id>
 ```
 
-自动事件和 `metrics record` 事件都逐文件原子写入 `.pipeline/metrics/`。只有 `observed` 和 `derived` 进入核心聚合；`reported` 只留作追溯。已有 `.workflow/` 的项目必须先把整个目录原样迁移到 `.pipeline/`，核对文件哈希并更新路径引用；迁移完成后不再使用旧目录。详见 `references/metrics-contract.md`。
+自动事件和 `metrics record` 事件都逐文件原子写入 `.pipeline/metrics/`。只有 `observed` 和 `derived` 进入核心聚合；`reported` 只留作追溯。新版本工具第一次访问已有 `.workflow/` 项目时会自动把整个目录原样迁移到 `.pipeline/`，核对文件哈希并更新路径引用；若 `.pipeline/` 已存在则停止并报告冲突，不会覆盖或双写。详见 `references/metrics-contract.md`。
 
 `metrics import-opencode-session` 只从 OpenCode Desktop 的结构化导出中提取可验证的工具错误、子代理错误和用户流程纠正信号；不会把自然语言 PASS 当作验收事实。`runtime preflight` 应在派发 executor/reviewer 前执行，`runtime role-scope` 用于阻止未授权的主代理产品代码修改。正式 `evidence verify` 前先执行 `evidence readiness`，避免把尚未生成 final-check 的正常阶段顺序误报为最终证据缺陷。
 

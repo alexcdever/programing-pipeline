@@ -7,10 +7,11 @@ from pathlib import Path
 PIPELINE_DIR_NAME = ".pipeline"
 LEGACY_PIPELINE_DIR_NAME = ".workflow"
 PIPELINE_DIR_NAMES = (PIPELINE_DIR_NAME,)
+LAYOUT_DIR_NAMES = (PIPELINE_DIR_NAME, LEGACY_PIPELINE_DIR_NAME)
 
 
 class LegacyPipelineLayoutError(ValueError):
-    """Raised when a project has not migrated its legacy evidence directory."""
+    """Raised when legacy and canonical evidence directories conflict."""
 
 
 def migrate_layout(root: Path) -> tuple[int, str]:
@@ -37,19 +38,33 @@ def migrate_layout(root: Path) -> tuple[int, str]:
 
     before = manifest(legacy)
     os.rename(legacy, canonical)
-    if before != manifest(canonical):
+    after = manifest(canonical)
+    if before != after:
         raise LegacyPipelineLayoutError("migration changed file contents")
     return len(before), "migrated"
 
 
 def active_pipeline_dir(root: Path) -> Path:
-    """Return the canonical directory; legacy projects must migrate first."""
-    return root / PIPELINE_DIR_NAME
+    """Automatically migrate legacy evidence before returning the canonical path."""
+    legacy = root / LEGACY_PIPELINE_DIR_NAME
+    canonical = root / PIPELINE_DIR_NAME
+    if legacy.exists():
+        migrate_layout(root)
+    return canonical
 
 
 def metrics_dirs(root: Path) -> list[Path]:
-    """Return only the canonical metrics directory."""
-    return [root / PIPELINE_DIR_NAME / "metrics"]
+    """Return the canonical metrics directory after automatic migration."""
+    return [active_pipeline_dir(root) / "metrics"]
+
+
+def canonical_evidence_dir(directory: Path) -> Path:
+    """Return the canonical task directory, migrating a legacy parent first."""
+    if directory.parent.name not in LAYOUT_DIR_NAMES:
+        return directory
+    root = directory.parent.parent
+    active_pipeline_dir(root)
+    return root / PIPELINE_DIR_NAME / directory.name
 
 
 def is_metrics_path(path: str) -> bool:
@@ -65,7 +80,7 @@ def is_metrics_path(path: str) -> bool:
 
 def evidence_root(directory: Path) -> Path:
     """Find the project root for the canonical evidence layout."""
-    if directory.parent.name == PIPELINE_DIR_NAME:
+    if directory.parent.name in LAYOUT_DIR_NAMES:
         return directory.parent.parent
     return directory
 

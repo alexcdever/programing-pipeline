@@ -57,7 +57,7 @@ git worktree add -b "<branch>" ".worktrees/<task-id>" "<baseline-head>"
 
 ## 证据目录迁移
 
-新任务使用 `<仓库根目录>/.pipeline/<task-id>/` 和 `.pipeline/metrics/`。旧项目迁移不是长期双写兼容：确认没有运行中的任务后，把 `.workflow/` 原样移动为 `.pipeline/`，核对全部文件哈希不变，再更新任务单/报告/机器 JSON 中的路径引用；随后用 `git status`、旧路径搜索和工具测试确认 `.workflow/` 不再存在。不要删除历史证据，也不要复制文件造成重复统计；迁移完成后工具不得继续写入旧目录。
+新任务使用 `<仓库根目录>/.pipeline/<task-id>/` 和 `.pipeline/metrics/`。任何工具命令发现旧 `.workflow/` 时，必须在继续执行前自动把它原样移动为 `.pipeline/`，核对全部文件哈希不变，再更新任务单/报告/机器 JSON 中的路径引用；若 `.pipeline/` 已存在则停止并报告冲突，不得覆盖或双写。不要删除历史证据，也不要复制文件造成重复统计。
 
 ## 产品替换的测试迁移
 

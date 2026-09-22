@@ -57,6 +57,17 @@ class GitChecks(unittest.TestCase):
             (metrics / 'event.json').write_text('{}')
             self.assertEqual(scope_check(p,['src/**'],[]),[])
 
+    def test_legacy_metrics_are_migrated_before_scope_check(self):
+        with tempfile.TemporaryDirectory() as d:
+            p=Path(d); subprocess.run(['git','init'],cwd=p,capture_output=True)
+            metrics = p / '.workflow' / 'metrics'
+            metrics.mkdir(parents=True)
+            (metrics / 'event.json').write_text('{}')
+            self.assertEqual(scope_check(p,['src/**'],[]),[])
+            self.assertFalse((p / '.workflow').exists())
+            self.assertTrue((p / '.pipeline' / 'metrics' / 'event.json').exists())
+
+
     def test_tracked_metrics_are_workflow_metadata(self):
         with tempfile.TemporaryDirectory() as d:
             p = Path(d); subprocess.run(['git','init'],cwd=p,capture_output=True)
