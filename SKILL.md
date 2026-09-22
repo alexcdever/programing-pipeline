@@ -61,7 +61,7 @@ AI agent 修改、重构、修复、扩展或验证 Git 项目时使用，尤其
 
 ## 机械工具与项目级反馈
 
-机械检查和统计由本技能内置的 `pipeline_tools` 命令程序执行；不要再依赖已废弃的独立 `pipeline-tools` worktree。技能只规定调用时机和判断边界。新任务单必须包含 `pipeline-contract` 机器区块，由 `pipeline-tools task validate` 校验；任务执行前运行 `task preflight`，执行中用 `command run` 统一超时和日志，范围用 `scope check`，正式证据校验前运行 `evidence readiness`，合并前后用 `evidence verify` 与 `gate`。
+机械检查和统计由本技能内置的 `pipeline_tools` 命令程序执行；不要再依赖已废弃的独立工具 worktree。技能只规定调用时机和判断边界。新任务单必须包含 `pipeline-contract` 机器区块，由 `pipeline-tools task validate` 校验；任务执行前运行 `task preflight`，执行中用 `command run` 统一超时和日志，范围用 `scope check`，正式证据校验前运行 `evidence readiness`，合并前后用 `evidence verify` 与 `gate`。
 
 - 工具输出的退出码和原始日志是机械事实；终端摘要不替代日志。
 - 在派发 executor/reviewer 前先运行 runtime preflight，确认 Node/pnpm/Git、native ABI 和项目所需测试能力；环境不匹配不得伪装成产品失败或继续正式验收。
