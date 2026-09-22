@@ -20,8 +20,8 @@
     "docs/tasks/pipeline-tools-v1.md",
     ".pipeline/metrics/**",
     ".pipeline/pipeline-tools-v1-continuation-1/**",
-    ".workflow/metrics/**",
-    ".workflow/pipeline-tools-v1-continuation-1/**"
+    ".pipeline/metrics/**",
+    ".pipeline/pipeline-tools-v1-continuation-1/**"
   ],
   "forbidden_paths": [
     "**/.env",
@@ -186,7 +186,7 @@
 - `pipeline_tools` 的 CLI 自动采集和范围检查。
 - 自动采集、递归保护、超时反馈和跟踪策略测试。
 - 技能、README、指标契约和 `.gitignore` 文档/配置。
-- 本任务自己的证据与 `.workflow/metrics/` 事件文件。
+- 本任务自己的证据与 `.pipeline/metrics/` 事件文件。
 
 ### 明确不改
 
@@ -199,7 +199,7 @@
 
 `pipeline-tools` 阶段命令启动
 → CLI 根据机械退出码和结构化参数执行自动采集
-→ 项目 `.workflow/metrics/` 原子写入一个阶段事件，必要时追加 derived 反馈事件
+→ 项目 `.pipeline/metrics/` 原子写入一个阶段事件，必要时追加 derived 反馈事件
 → `metrics report/export` 从事件重建统计
 → 指标文件作为工作流历史进入 Git，scope check 不将工具自动生成的指标视为产品越界
 
@@ -236,12 +236,12 @@
 
 | 验收测试 | 状态 | 当前测试/命令 | 最新证据 | 备注 |
 |---|---|---|---|---|
-| AT1 | 已通过 | targeted automatic collection test | `.workflow/pipeline-tools-v1-continuation-1/full-test.raw.log` | task validate writes tracked event |
-| AT2 | 已通过 | timeout feedback test | `.workflow/pipeline-tools-v1-continuation-1/full-test.raw.log` | stage + derived timeout |
-| AT2B–AT2F | 已通过 | attribution/retry/argparse/redaction tests | `.workflow/pipeline-tools-v1-continuation-1/full-test.raw.log` | path and failure boundaries |
-| AT3–AT3E | 已通过 | recursion/scope/identity tests | `.workflow/pipeline-tools-v1-continuation-1/full-test.raw.log` | forbidden override retained |
-| AT4 / AT4B / AT4C / AT4D | 已通过 | full unittest suite | `.workflow/pipeline-tools-v1-continuation-1/full-test.raw.log` | 62 tests OK |
-| AT5 | 已通过 | task validate / scope / compile / diff check / pnpm10 preflight | `.workflow/pipeline-tools-v1-continuation-1/runtime-preflight-pnpm10.json` | continuation contract and current runtime valid |
+| AT1 | 已通过 | targeted automatic collection test | `.pipeline/pipeline-tools-v1-continuation-1/full-test.raw.log` | task validate writes tracked event |
+| AT2 | 已通过 | timeout feedback test | `.pipeline/pipeline-tools-v1-continuation-1/full-test.raw.log` | stage + derived timeout |
+| AT2B–AT2F | 已通过 | attribution/retry/argparse/redaction tests | `.pipeline/pipeline-tools-v1-continuation-1/full-test.raw.log` | path and failure boundaries |
+| AT3–AT3E | 已通过 | recursion/scope/identity tests | `.pipeline/pipeline-tools-v1-continuation-1/full-test.raw.log` | forbidden override retained |
+| AT4 / AT4B / AT4C / AT4D | 已通过 | full unittest suite | `.pipeline/pipeline-tools-v1-continuation-1/full-test.raw.log` | 62 tests OK |
+| AT5 | 已通过 | task validate / scope / compile / diff check / pnpm10 preflight | `.pipeline/pipeline-tools-v1-continuation-1/runtime-preflight-pnpm10.json` | continuation contract and current runtime valid |
 
 ### 最终结果
 

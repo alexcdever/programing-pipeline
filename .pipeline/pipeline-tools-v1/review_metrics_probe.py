@@ -46,7 +46,7 @@ with tempfile.TemporaryDirectory() as d:
     p("ASSERT OK: reported excluded from success_rate; token total from core events only")
 
     p("\n== D4 raw event files: sanitization scan ==")
-    files = sorted((root / ".workflow" / "metrics").glob("*.json"))
+    files = sorted((root / ".pipeline" / "metrics").glob("*.json"))
     raw = "\n".join(fp.read_text(encoding="utf-8") for fp in files)
     p("files:", [fp.name for fp in files])
     p("contains absolute temp path:", str(root) in raw,
@@ -65,13 +65,13 @@ with tempfile.TemporaryDirectory() as d:
     p("export exit", rc)
     p("export file exists:", (root / "export.json").exists(),
       "| same aggregate:", json.loads((root / "export.json").read_text(encoding="utf-8")) == agg)
-    (root / ".workflow" / "demo-task").mkdir(parents=True, exist_ok=True)
-    (root / ".workflow" / "demo-task" / "executor-report.md").write_text("keep", encoding="utf-8")
+    (root / ".pipeline" / "demo-task").mkdir(parents=True, exist_ok=True)
+    (root / ".pipeline" / "demo-task" / "executor-report.md").write_text("keep", encoding="utf-8")
     rc, out, err = cli("metrics", "purge", str(root))
     p("purge exit", rc, "| out:", out)
-    p("events after purge:", list((root / ".workflow" / "metrics").glob("*.json")))
+    p("events after purge:", list((root / ".pipeline" / "metrics").glob("*.json")))
     p("evidence dir survived purge:",
-      (root / ".workflow" / "demo-task" / "executor-report.md").exists())
+      (root / ".pipeline" / "demo-task" / "executor-report.md").exists())
     rc, out, err = cli("metrics", "report", str(root))
     p("report after purge exit", rc, "| out:", out)
     p("aggregate rebuildable from zero events:", json.loads(out)["events"] == 0)
@@ -82,8 +82,8 @@ with tempfile.TemporaryDirectory() as d:
     p("exit", rc, "| err:", (err or "").splitlines()[0] if err else "")
 
     p("\n== D7 malformed event file makes aggregate fail-closed ==")
-    (root / ".workflow" / "metrics").mkdir(parents=True, exist_ok=True)
-    (root / ".workflow" / "metrics" / "bad.json").write_text("{not json", encoding="utf-8")
+    (root / ".pipeline" / "metrics").mkdir(parents=True, exist_ok=True)
+    (root / ".pipeline" / "metrics" / "bad.json").write_text("{not json", encoding="utf-8")
     rc, out, err = cli("metrics", "report", str(root))
     p("exit", rc, "| err:", err)
 

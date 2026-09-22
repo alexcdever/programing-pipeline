@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 
 from .contract import validate_task
-from .layout import PIPELINE_DIR_NAMES
+from .layout import PIPELINE_DIR_NAMES, migrate_layout
 from .core import (
     BLOCKED,
     CONFIG,
@@ -194,6 +194,8 @@ def _build_parser() -> argparse.ArgumentParser:
     session.add_argument("root", type=Path)
     session.add_argument("session", type=Path)
     session.add_argument("--task-id", default="opencode-session")
+    migrate = metrics_sub.add_parser("migrate")
+    migrate.add_argument("root", type=Path)
 
     runtime = groups.add_parser("runtime", help="runtime and agent capability checks")
     runtime_sub = runtime.add_subparsers(dest="action", required=True)
@@ -830,6 +832,10 @@ def _main(argv: list[str] | None = None) -> int:
             _print_errors(errors)
             return PASS if not errors else BLOCKED
         if args.group == "metrics":
+            if args.action == "migrate":
+                count, status = migrate_layout(args.root)
+                print(json.dumps({"migrated": count, "status": status}, ensure_ascii=True))
+                return PASS
             if args.action == "record":
                 path = metric_event(
                     args.root,

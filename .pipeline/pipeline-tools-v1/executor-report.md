@@ -33,9 +33,9 @@
 
 | 命令 | 退出码 | 日志 |
 |---|---|---|
-| `python -m unittest discover -s tests -v` | 0（24 tests OK） | `.workflow/pipeline-tools-v1/unittest-full.log` |
-| `python -m pipeline_tools task preflight . --contract d9a4909` | 0 PASS | `.workflow/pipeline-tools-v1/preflight.log` |
-| `python -m pipeline_tools scope check . --allowed ...`（本任务允许清单） | 0 PASS | `.workflow/pipeline-tools-v1/scope-check.log` |
+| `python -m unittest discover -s tests -v` | 0（24 tests OK） | `.pipeline/pipeline-tools-v1/unittest-full.log` |
+| `python -m pipeline_tools task preflight . --contract d9a4909` | 0 PASS | `.pipeline/pipeline-tools-v1/preflight.log` |
+| `python -m pipeline_tools scope check . --allowed ...`（本任务允许清单） | 0 PASS | `.pipeline/pipeline-tools-v1/scope-check.log` |
 | `python -m pipeline_tools task validate docs/tasks/pipeline-tools-v1.md` | 0 PASS | 上面日志引用 |
 | `python -m pipeline_tools metrics record/report/purge .` | 0/0/0（事件往返、重建、清空） | 终端输出（会话记录） |
 
@@ -59,11 +59,11 @@
   "round": 3,
   "status": "PASS",
   "commands": [
-    {"command": "timeout 180 python -m unittest discover -s tests -v", "exit_code": 0, "evidence_ref": ".workflow/pipeline-tools-v1/unittest-full.log"},
-    {"command": "python -m pipeline_tools task preflight . --contract d9a4909", "exit_code": 0, "evidence_ref": ".workflow/pipeline-tools-v1/preflight.log"},
-    {"command": "python -m pipeline_tools scope check . --allowed <task-allow-list>", "exit_code": 0, "evidence_ref": ".workflow/pipeline-tools-v1/scope-check.log"},
-    {"command": "python -m pipeline_tools task validate docs/tasks/pipeline-tools-v1.md", "exit_code": 0, "evidence_ref": ".workflow/pipeline-tools-v1/preflight.log"},
-    {"command": "python -m pipeline_tools metrics record/report/purge .", "exit_code": 0, "evidence_ref": ".workflow/pipeline-tools-v1/executor-report.md"}
+    {"command": "timeout 180 python -m unittest discover -s tests -v", "exit_code": 0, "evidence_ref": ".pipeline/pipeline-tools-v1/unittest-full.log"},
+    {"command": "python -m pipeline_tools task preflight . --contract d9a4909", "exit_code": 0, "evidence_ref": ".pipeline/pipeline-tools-v1/preflight.log"},
+    {"command": "python -m pipeline_tools scope check . --allowed <task-allow-list>", "exit_code": 0, "evidence_ref": ".pipeline/pipeline-tools-v1/scope-check.log"},
+    {"command": "python -m pipeline_tools task validate docs/tasks/pipeline-tools-v1.md", "exit_code": 0, "evidence_ref": ".pipeline/pipeline-tools-v1/preflight.log"},
+    {"command": "python -m pipeline_tools metrics record/report/purge .", "exit_code": 0, "evidence_ref": ".pipeline/pipeline-tools-v1/executor-report.md"}
   ],
   "assertions": [
     "24 unittest cases pass with exit 0",
@@ -73,9 +73,9 @@
     "evidence verification rejects prose-only reports without pipeline-evidence block"
   ],
   "evidence_refs": [
-    ".workflow/pipeline-tools-v1/unittest-full.log",
-    ".workflow/pipeline-tools-v1/preflight.log",
-    ".workflow/pipeline-tools-v1/scope-check.log"
+    ".pipeline/pipeline-tools-v1/unittest-full.log",
+    ".pipeline/pipeline-tools-v1/preflight.log",
+    ".pipeline/pipeline-tools-v1/scope-check.log"
   ],
   "unverified": [
     "POSIX bin wrapper not executed on this Windows host (cmd wrapper verified via test_bin_wrappers_run)",

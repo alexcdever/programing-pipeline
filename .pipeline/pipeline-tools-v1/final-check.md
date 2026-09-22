@@ -43,10 +43,10 @@ READY-TO-MERGE（等待用户审阅后合并）。
   "round": 4,
   "status": "READY-TO-MERGE",
   "commands": [
-    {"command": "python -m unittest discover -s tests -q", "exit_code": 0, "evidence_ref": ".workflow/pipeline-tools-v1/final-check-unittest.log"},
-    {"command": "python -m pipeline_tools task validate docs/tasks/pipeline-tools-v1.md", "exit_code": 0, "evidence_ref": ".workflow/pipeline-tools-v1/final-check-validate.log"},
-    {"command": "python -m pipeline_tools task preflight . --contract d9a4909", "exit_code": 0, "evidence_ref": ".workflow/pipeline-tools-v1/final-check-preflight.log"},
-    {"command": "python -m pipeline_tools scope check . --allowed <task-allow-list>", "exit_code": 0, "evidence_ref": ".workflow/pipeline-tools-v1/final-check-scope.log"}
+    {"command": "python -m unittest discover -s tests -q", "exit_code": 0, "evidence_ref": ".pipeline/pipeline-tools-v1/final-check-unittest.log"},
+    {"command": "python -m pipeline_tools task validate docs/tasks/pipeline-tools-v1.md", "exit_code": 0, "evidence_ref": ".pipeline/pipeline-tools-v1/final-check-validate.log"},
+    {"command": "python -m pipeline_tools task preflight . --contract d9a4909", "exit_code": 0, "evidence_ref": ".pipeline/pipeline-tools-v1/final-check-preflight.log"},
+    {"command": "python -m pipeline_tools scope check . --allowed <task-allow-list>", "exit_code": 0, "evidence_ref": ".pipeline/pipeline-tools-v1/final-check-scope.log"}
   ],
   "assertions": [
     "28 unittest cases pass with exit 0 in the final serial batch",
@@ -56,10 +56,10 @@ READY-TO-MERGE（等待用户审阅后合并）。
     "executor and reviewer reports pass machine evidence verification"
   ],
   "evidence_refs": [
-    ".workflow/pipeline-tools-v1/final-check-unittest.log",
-    ".workflow/pipeline-tools-v1/final-check-validate.log",
-    ".workflow/pipeline-tools-v1/final-check-preflight.log",
-    ".workflow/pipeline-tools-v1/final-check-scope.log"
+    ".pipeline/pipeline-tools-v1/final-check-unittest.log",
+    ".pipeline/pipeline-tools-v1/final-check-validate.log",
+    ".pipeline/pipeline-tools-v1/final-check-preflight.log",
+    ".pipeline/pipeline-tools-v1/final-check-scope.log"
   ],
   "unverified": [
     "POSIX bin wrapper not executed on this Windows host",

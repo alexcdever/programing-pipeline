@@ -40,7 +40,7 @@
 ### 已确认事实
 
 - 当前技能已有 `scripts/validate_task_sheet.py`，但只做 Markdown 结构检查。
-- 新任务使用 `.pipeline/<task-id>/` 和 `.pipeline/metrics/`；迁移前的 `.workflow/<task-id>/`、`.workflow/metrics/` 仍由兼容工具读取。
+- 新任务和迁移后的任务统一使用 `.pipeline/<task-id>/` 和 `.pipeline/metrics/`；旧 `.pipeline/` 只作为待迁移现场。
 - 机械校验应 fail closed；统计数据是派生反馈，不是验收证据。
 
 ### 未验证事实
@@ -58,7 +58,7 @@
 
 主代理提供已冻结任务单、项目根目录和明确命令参数；工具程序只执行可验证的机械检查或记录已声明事实：
 
-触发命令 → 解析任务契约/Git/报告/命令输出 → 生成结构化 PASS、FAIL、BLOCKED 或契约漂移结果 → 原始输出落盘、终端只返回短摘要；metrics 写入新项目的 `.pipeline/metrics/`，旧项目按兼容规则写入 `.workflow/metrics/`，作为可审查流水线历史进入 Git。
+触发命令 → 解析任务契约/Git/报告/命令输出 → 生成结构化 PASS、FAIL、BLOCKED 或契约漂移结果 → 原始输出落盘、终端只返回短摘要；metrics 统一写入 `.pipeline/metrics/`，旧 `.pipeline/` 必须先迁移，作为可审查流水线历史进入 Git。
 
 - 工具程序使用稳定退出码：`0` 通过，`1` 观察到产品/测试失败，`2` 参数或配置错误，`3` 证据不足或环境阻塞，`4` 身份、契约或范围漂移。
 - 任务单中的 `pipeline-contract` JSON 区块是机械检查投影；任务单正文供人阅读，工具不得通过自由文本补全缺失字段。
@@ -83,9 +83,7 @@
     "scripts/validate_task_sheet.py",
     "docs/tasks/pipeline-tools-v1.md",
     ".pipeline/metrics/**",
-    ".pipeline/pipeline-tools-v1/**",
-    ".workflow/metrics/**",
-    ".workflow/pipeline-tools-v1/**"
+    ".pipeline/pipeline-tools-v1/**"
   ],
   "forbidden_paths": [
     "package.json",
@@ -156,7 +154,7 @@
 
 ### 验收测试5：项目级脱敏反馈统计
 
-- 触发：初始化新项目的 `.pipeline/metrics/`，或识别旧项目的 `.workflow/metrics/`，记录 observed/derived/reported 事件，聚合并输出报告。
+- 触发：在 `.pipeline/metrics/` 记录 observed/derived/reported 事件，聚合并输出报告；若发现旧 `.pipeline/metrics/`，先迁移再执行。
 - 断言：每事件独立原子文件；任务和项目标识不保存绝对路径；reported 不进入核心成功率；缺失 token 为 null/unknown；审查推翻、重试、超时、证据缺口和合并后回归可从 observed/derived 事件计算；汇总可由事件重建。
 - 测试：`tests/test_metrics.py`：脱敏、聚合、重建和未知值用例。
 - 命令：`python -m unittest discover -s tests -p 'test_metrics.py' -v`
@@ -201,7 +199,7 @@
 
 | 验收测试 | 状态 | 当前测试/命令 | 最新证据 | 备注 |
 |---|---|---|---|---|
-| 验收测试1 | 已通过 | `python -m unittest discover -s tests -p 'test_contract.py'` | `.workflow/pipeline-tools-v1/unittest-full.log`（28 tests OK，含契约用例） | 契约 fail-closed 11 种失败模式由审查探针复核 |
+| 验收测试1 | 已通过 | `python -m unittest discover -s tests -p 'test_contract.py'` | `.pipeline/pipeline-tools-v1/unittest-full.log`（28 tests OK，含契约用例） | 契约 fail-closed 11 种失败模式由审查探针复核 |
 | 验收测试2 | 已通过 | `python -m unittest discover -s tests -p 'test_git_checks.py'` | 同上 | freeze/scope 身份检查含临时真实 Git 仓库 |
 | 验收测试3 | 已通过 | `python -m unittest discover -s tests -p 'test_runner.py'` | 同上 | 超时=3、进程树终止、脱敏均覆盖 |
 | 验收测试4 | 已通过 | `python -m unittest discover -s tests -p 'test_evidence.py'` | 同上 | 机器证据、身份不匹配、散文拒绝、gate 状态闸门 |
@@ -223,7 +221,7 @@
 
 ### 设计变更与 continuation 索引
 
-- [`pipeline-tools-v1-continuation-1`](pipeline-tools-v1-continuation-1.md)：将指标从显式可选记录改为非 `metrics` 阶段命令的自动采集，并允许 `.workflow/metrics/**` 作为可审查 Git 历史；不改变验收结论语义。
+- [`pipeline-tools-v1-continuation-1`](pipeline-tools-v1-continuation-1.md)：将指标从显式可选记录改为非 `metrics` 阶段命令的自动采集，并允许 `.pipeline/metrics/**` 作为可审查 Git 历史；不改变验收结论语义。
 
 ### 最终结果
 

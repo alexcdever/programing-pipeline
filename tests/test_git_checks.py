@@ -49,13 +49,12 @@ class GitChecks(unittest.TestCase):
             (metrics / 'event.json').write_text('{}')
             self.assertEqual(scope_check(p,['src/**'],['.pipeline/metrics/**']), ['.pipeline/metrics/event.json'])
 
-    def test_legacy_and_canonical_metrics_are_accepted(self):
+    def test_canonical_metrics_are_accepted(self):
         with tempfile.TemporaryDirectory() as d:
-            p = Path(d); subprocess.run(['git','init'],cwd=p,capture_output=True)
-            for name in ('.workflow', '.pipeline'):
-                metrics = p / name / 'metrics'
-                metrics.mkdir(parents=True)
-                (metrics / 'event.json').write_text('{}')
+            p=Path(d); subprocess.run(['git','init'],cwd=p,capture_output=True)
+            metrics = p / '.pipeline' / 'metrics'
+            metrics.mkdir(parents=True)
+            (metrics / 'event.json').write_text('{}')
             self.assertEqual(scope_check(p,['src/**'],[]),[])
 
     def test_tracked_metrics_are_workflow_metadata(self):

@@ -1,0 +1,1 @@
+{"checks": {"product_write": false, "repository_read": true, "runtime": true, "workflow_write": true}, "errors": [], "role": "reviewer", "runtime": {"blocker_class": null, "checks": {"git": "2.55.0", "node": "22.23.2", "pnpm": "10.27.0"}, "errors": [], "status": "pass"}, "schema": 1, "status": "pass"}

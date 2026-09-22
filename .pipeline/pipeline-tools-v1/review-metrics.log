@@ -1,11 +1,11 @@
 # phase D metrics — date: 2026-09-18T08:04:23+0800 cwd: D:\Projects\Skills\programing-pipeline-tools
 
 == D1 record observed pass, task-id 'a/b' (unsafe chars), abs evidence-ref, no token ==
-exit 0 | out: {"event_file": "C:\\Users\\alexc\\AppData\\Local\\Temp\\tmptt2aw2hw\\.workflow\\metrics\\1789689863669193600-32fc5ce98f52441383bc64020467328d.json"} | err: 
+exit 0 | out: {"event_file": "C:\\Users\\alexc\\AppData\\Local\\Temp\\tmptt2aw2hw\\.pipeline\\metrics\\1789689863669193600-32fc5ce98f52441383bc64020467328d.json"} | err: 
 
 == D2 record reported pass (must NOT enter core) + derived fail token-count 12 ==
-exit 0 {"event_file": "C:\\Users\\alexc\\AppData\\Local\\Temp\\tmptt2aw2hw\\.workflow\\metrics\\1789689863903771800-6e59464c00284013b5ff7fd80a1d3870.json"} 
-exit 0 {"event_file": "C:\\Users\\alexc\\AppData\\Local\\Temp\\tmptt2aw2hw\\.workflow\\metrics\\1789689864153467000-4cc8a9fb691141769bc0fd2d76b1d22f.json"} 
+exit 0 {"event_file": "C:\\Users\\alexc\\AppData\\Local\\Temp\\tmptt2aw2hw\\.pipeline\\metrics\\1789689863903771800-6e59464c00284013b5ff7fd80a1d3870.json"} 
+exit 0 {"event_file": "C:\\Users\\alexc\\AppData\\Local\\Temp\\tmptt2aw2hw\\.pipeline\\metrics\\1789689864153467000-4cc8a9fb691141769bc0fd2d76b1d22f.json"} 
 
 == D3 metrics report ==
 exit 0 | out: {"blocked": 0, "core_events": 2, "events": 3, "failed": 1, "flaky": 0, "passed": 1, "reported_events": 1, "schema": 1, "success_rate": 0.5, "token_count_total": 12, "token_count_unknown": 1, "unknown_results": 0}

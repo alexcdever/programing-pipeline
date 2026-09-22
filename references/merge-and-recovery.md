@@ -2,7 +2,7 @@
 
 ## Worktree 路径与恢复
 
-实现 worktree 的规范路径是 `<仓库根目录>/.worktrees/<task-id>`，由主代理在契约提交后用 `git worktree add` 创建；Git 会创建缺失的目标目录和父目录，不需要预先 `mkdir`。新任务证据的规范路径是 `<仓库根目录>/.pipeline/<task-id>`；合并或恢复前必须以当前 `git worktree list --porcelain` 为准，核对任务单、dispatch、报告和实际路径一致。已有 `.workflow/<task-id>` 的旧任务继续使用旧路径。
+实现 worktree 的规范路径是 `<仓库根目录>/.worktrees/<task-id>`，由主代理在契约提交后用 `git worktree add` 创建；Git 会创建缺失的目标目录和父目录，不需要预先 `mkdir`。新任务证据的规范路径是 `<仓库根目录>/.pipeline/<task-id>`；合并或恢复前必须以当前 `git worktree list --porcelain` 为准，核对任务单、dispatch、报告和实际路径一致。`.workflow/<task-id>` 只允许作为迁移前现场；迁移维护完成后必须不存在旧目录，不能继续写入。迁移时原样移动到 `.pipeline/`，并核对文件哈希、引用和工具测试。
 
 发现仓库同级 worktree、项目内第二个 worktree、路径漂移或同一 branch 被多个 worktree 占用时，先保留所有现场并 reconcile；不得删除、移动或重新创建来掩盖身份问题。失败恢复继续使用已核对的 worktree；如果必须更换路径，记录裁决并按延续任务处理。
 
