@@ -1,7 +1,7 @@
 ---
 name: pipeline
 description: "Use when an agent plans, builds, reviews, or merges code."
-version: 0.9.0
+version: 0.11.0
 author: Alex Chen (alexcdever)
 license: MIT
 platforms: [linux, macos, windows]
@@ -65,7 +65,7 @@ AI agent 修改、重构、修复、扩展或验证 Git 项目时使用，尤其
 
 - 工具输出的退出码和原始日志是机械事实；终端摘要不替代日志。
 - 在派发 executor/reviewer 前先运行 runtime preflight，确认 Node/pnpm/Git、native ABI 和项目所需测试能力；环境不匹配不得伪装成产品失败或继续正式验收。
-- 子代理启动后先执行 `runtime handshake`：确认可读任务与 worktree、可执行验收命令、可写 `.pipeline/**`，reviewer 不可写产品代码；握手 JSON 必须落在当前任务证据目录。
+- 子代理启动前，主代理生成环境检查列表，包含：可读任务与worktree、可执行验收命令、可写 `.pipeline/**`、reviewer不可写产品代码等。子代理按检查列表逐项验证，通过后开始工作，任何检查失败立即向主代理报告BLOCKED。
 - 主代理未经用户明确授权不得修改产品代码；executor/reviewer 失败后应重派、建立 continuation 或保留决策点，不得接管实现。
 - OpenCode Desktop 会话可用 `metrics import-opencode-session` 导入结构化流程信号；导入器不得从自然语言推断产品 PASS。
 - 程序化命令应优先使用 `--format json --output <path>`；JSON 结果是后续阶段的权威输入，终端短摘要不作为流程状态来源。
@@ -73,7 +73,7 @@ AI agent 修改、重构、修复、扩展或验证 Git 项目时使用，尤其
 - 结构化执行闭环使用 `dispatch write`、`result verify` 和 `freshness`；只有当前 task-id、角色、HEAD、验收结果和证据引用均通过机械校验，才能把语义代理的 recommendation 交给下一阶段。
 - 工具不可用、命令超时、证据缺失或身份/范围漂移时标为 `BLOCKED`/漂移，不绕过工具改写成 PASS。
 - 报告必须包含机器可读的 `pipeline-evidence` 区块；自然语言报告不能单独产生验收结论。
-- 每个非 `metrics` 的 `pipeline-tools` 阶段命令默认自动写入一个 `observed` 结果事件到项目 `.pipeline/metrics/`；超时、环境阻塞、证据缺口、范围漂移等只根据机械退出码和结构化结果追加 `derived` 反馈事件。该目录应纳入 Git 追踪，作为可审查的流程改进历史。新版本工具首次发现 `.workflow/` 时会先自动迁移并校验；若 `.pipeline/` 已存在则报告冲突并停止，不覆盖、不双写。`reported` 只能保留追溯，统计不参与验收，不自动改写技能或契约。
+- 每个非 `metrics` 的 `pipeline-tools` 阶段命令默认自动写入一个 `observed` 结果事件到项目 `.pipeline/metrics/`；超时、环境阻塞、证据缺口、范围漂移等只根据机械退出码和结构化结果追加 `derived` 反馈事件。新版本工具首次发现 `.workflow/` 时会先自动迁移并校验；若 `.pipeline/` 已存在则报告冲突并停止，不覆盖、不双写。`reported` 只能保留追溯，统计不参与验收，不自动改写技能或契约。
 - 自动采集不得从自然语言报告推断产品 PASS；不得记录 prompt、完整命令输出、凭据、token 或业务数据。仅在测试/明确诊断时使用 `PIPELINE_TOOLS_DISABLE_AUTO_METRICS=1` 关闭。
 - 正式 `evidence verify` 前先运行 `evidence readiness`；缺 final-check 或必要报告时记录“未准备好”，不要把阶段顺序问题误作产品验收失败。指标报告优先按 task/run/terminal 维度解释，不用全项目累计 `success_rate` 代替终态结论。
 - 正常只把短摘要放入上下文；完整输出、报告和统计事件留在项目文件中，需要诊断时再读取。
@@ -104,7 +104,33 @@ AI agent 修改、重构、修复、扩展或验证 Git 项目时使用，尤其
 
 ## 证据目录最小要求
 
-`.pipeline/<task-id>/` 至少含 `executor-report.md`、`review-report.md`、`final-check.md`；每份写明 task-id、worktree、branch、轮次、命令、退出码、关键断言和证据文件。旧 `.workflow/<task-id>/` 必须迁移到这里，不能继续作为运行目录。
+`.pipeline/<task-id>/` 至少含 `executor-report.md`、`review-report.md`、`final-check.md`；每份写明 task-id、worktree、branch、轮次、命令、退出码、关键断言。验收失败时保存完整日志等证据文件用于诊断；成功时无需保存原始输出。旧 `.workflow/<task-id>/` 必须迁移到这里，不能继续作为运行目录。
+
+## 版本升级与兼容性
+
+### 目录结构变化
+- **v0.10.0 → v0.11.0**：移除握手JSON文件要求，改用模板化环境检查列表；证据文件改为失败时保存，成功时不保存
+- **旧版本迁移**：`.workflow/<task-id>/` 目录在新版本工具首次发现时自动迁移到 `.pipeline/<task-id>/` 并校验；若 `.pipeline/` 已存在则报告冲突并停止，不覆盖、不双写
+
+### 向后兼容性
+- 已存在的 `.pipeline/` 目录结构完全兼容新版本
+- 旧版握手JSON文件（如果存在）不影响新版本工作流，主代理会使用新的检查列表机制
+- 已保存的证据文件（包括成功时的原始输出）可保留作为历史记录，新任务按新规则执行
+
+### 升级建议
+- 更新技能版本后，主代理在下次任务启动时自动使用新的环境检查列表机制
+- 不需要手动清理旧版握手JSON文件或证据文件，但可选择清理成功任务的原始输出以节省空间
+- `.pipeline/` 目录的Git追踪策略由项目开发者决定，技能不做强制要求
+
+### 自动优化机制
+主代理在任务启动时自动执行以下优化操作：
+- **清理旧版握手JSON文件**：自动删除 `.pipeline/<task-id>/` 中的 handshake.json 文件（如有）
+- **清理成功任务的原始输出**：自动删除已合并任务的完整日志等证据文件，保留结构化报告
+- **应用新证据策略**：新任务执行时按"失败保存、成功不保存"规则处理证据文件
+- **环境检查升级**：自动使用新的模板化环境检查列表，替代旧版握手机制
+- **目录结构校验**：检查并确保 `.pipeline/` 目录结构符合当前版本要求
+
+自动优化在主代理的"恢复核对"阶段执行，不影响正在进行中的任务。
 
 ## 任务规模与延续任务
 
